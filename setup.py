@@ -10,7 +10,6 @@ pd.options.display.float_format = '{:.4g}'.format
 class powerGrid:
     def __init__(self):
         print('in init. Here we lay down the grid structure and load some random state values based on IEEE dataset');
-
         with open('JanLoadEvery5mins.pkl', 'rb') as pickle_file:
             self.loadProfile = pickle.load(pickle_file)
         with open('generatorValuesEvery5mins.pkl', 'rb') as pickle_file:
@@ -60,22 +59,39 @@ class powerGrid:
                                                  std_type=self.net.line.at[3, 'std_type'], to_bus=3,
                                                  type=self.net.line.at[3, 'type'],
                                                  x_ohm_per_km=self.net.line.at[3, 'x_ohm_per_km']);
+        self.stateIndex = np.random.randint(len(self.loadProfile), size=1)[0];
+        self.scaleLoadAndPowerValue(self.stateIndex);
 
     def takeAction(self, action):
         print('take action and observer the grid for reactance component or power losses');
 
+    def scaleLoadAndPowerValue(self,index):
+        scalingFactorLoad = self.loadProfile[index]/self.loadProfile[0];
+        scalingFactorPower = self.powerProfile[index] / self.powerProfile[0];
+        self.net.load.p_mw[0] = self.net.load.p_mw[0] * scalingFactorLoad;
+        self.net.load.q_mvar[0] = self.net.load.q_mvar[0] * scalingFactorLoad;
+        self.net.gen.p_mw[0] = self.net.gen.p_mw[0] * scalingFactorPower;
+        #self.net.gen.iloc[0]['q_mvar'] = self.net.gen.iloc[0]['q_mvar'] * scalingFactorPower;
+
     def reset(self):
         print('reset the current environment for next episode');
-        for i in range(0, self.net.load['bus'].count()):
-            print(self.net.load.iloc[i]['p_mw']);
+        self.stateIndex = np.random.randint(len(self.loadProfile), size=1)[0];
+        self.scaleLoadAndPowerValue(self.stateIndex);
 
     def plotGridFlow(self):
         print('plotting powerflow for the current state')
         plot.simple_plot(self.net)
 
-
-#env=powerGrid();
+env=powerGrid();
 #env.plotGridFlow();
+print(env.net.load.iloc[0]['p_mw'])
+print(env.net.load.iloc[0]['q_mvar'])
+print(env.loadProfile[0])
+print(env.net.gen.p_mw[0])
+env.reset();
+print(env.net.load.iloc[0]['p_mw'])
+print(env.net.load.iloc[0]['q_mvar'])
+print(env.net.gen.p_mw[0])
 #env.reset();
 
 ##Load Profile data has been pickled already, do not run this function for now
