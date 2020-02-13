@@ -64,11 +64,12 @@ class powerGrid:
         self.net.gen.drop(index=[0], inplace=True)  # Drop PV generator
         pp.create_sgen(self.net, 3, p_mw=318, q_mvar=181.4, name='static generator', scaling=1)
         self.stateIndex = np.random.randint(len(self.loadProfile), size=1)[0];
-        self.scaleLoadAndPowerValue(self.stateIndex);
-        pp.runpp(self.net)
+        #self.stateIndex=1020
+        self.scaleLoadAndPowerValue(self.stateIndex,0);
 
     def takeAction(self,p_ref_pu,v_ref_pu):
-        print('taking action p_ref_pu='+str(p_ref_pu)+' and observer the grid for reactance component or power losses');
+        # print('taking action p_ref_pu='+str(p_ref_pu)+' and observe the grid for reactance component or power losses at stateIndex:');
+        # print(self.stateIndex)
         S_base = 100e6
         V_base = 230e3
         x_base = pow(V_base, 2) / S_base
@@ -76,33 +77,54 @@ class powerGrid:
         k_x_comp_pu = self.K_x_comp_pu(p_ref_pu,x_line_pu)
         k_x_comp_pu=-0.8 if k_x_comp_pu<-0.8 else k_x_comp_pu;
         k_x_comp_pu = 0.2 if k_x_comp_pu > 0.2 else k_x_comp_pu;
+        print(k_x_comp_pu)
         if self.net.switch.at[1, 'closed']:
             self.net.switch.at[1, 'closed'] = False
+        imdepenceBackup=self.net.impedance.loc[0, 'xtf_pu'];
         self.net.impedance.loc[0, ['xft_pu', 'xtf_pu']] = x_line_pu * k_x_comp_pu
-        pp.runpp(self.net)
+        networkFailure=False
+        try:
+            pp.runpp(self.net);
+            reward = -1;
+        except:
+            networkFailure=True;
+            self.net.impedance.loc[0, ['xft_pu', 'xtf_pu']]=imdepenceBackup;
+            pp.runpp(self.net);
+            reward=1000;
+
+        resultBus=self.net.res_bus
         self.stateIndex+=1;
-        self.scaleLoadAndPowerValue(self.stateIndex);
-        return self.net.res_bus,self.stateIndex == len(self.powerProfile);
+        if self.stateIndex < len(self.powerProfile):
+            if(self.scaleLoadAndPowerValue(self.stateIndex,self.stateIndex-1) == False):
+                networkFailure=True;
+                reward=1000;
+        return resultBus,reward,self.stateIndex == len(self.powerProfile) or networkFailure;
 
     def reset(self):
         print('reset the current environment for next episode');
+        oldIndex = self.stateIndex;
         self.stateIndex = np.random.randint(len(self.loadProfile), size=1)[0];
-        self.scaleLoadAndPowerValue(self.stateIndex);
         self.net.switch.at[0, 'closed'] = False
         self.net.switch.at[1, 'closed'] = True
-        pp.runpp(self.net)
+        self.scaleLoadAndPowerValue(self.stateIndex,oldIndex);
 
     def plotGridFlow(self):
         print('plotting powerflow for the current state')
         plot.simple_plot(self.net)
 
-    def scaleLoadAndPowerValue(self,index):
-        scalingFactorLoad = self.loadProfile[index]/self.loadProfile[0];
-        scalingFactorPower = self.powerProfile[index] / self.powerProfile[0];
+    def scaleLoadAndPowerValue(self,index,refIndex):
+        scalingFactorLoad = self.loadProfile[index]/self.loadProfile[refIndex];
+        scalingFactorPower = self.powerProfile[index] / self.powerProfile[refIndex];
         self.net.load.p_mw[0] = self.net.load.p_mw[0] * scalingFactorLoad;
         self.net.load.q_mvar[0] = self.net.load.q_mvar[0] * scalingFactorLoad;
         self.net.sgen.p_mw = self.net.sgen.p_mw * scalingFactorPower;
         self.net.sgen.q_mvar = self.net.sgen.q_mvar * scalingFactorPower;
+        try:
+            pp.runpp(self.net);
+            return True;
+        except:
+            return False;
+
 
     def K_x_comp_pu(self, p_ref_pu,x_line_pu):
         v_s_pu = self.net.res_bus.vm_pu[3]
@@ -117,8 +139,15 @@ class powerGrid:
 
 env=powerGrid();
 #env.plotGridFlow();
-print(env.takeAction(1.8,1))
-print(env.takeAction(2,1))
+for i in range(0,100):
+    result, reward, done = env.takeAction(0.6, 1)
+    if done:
+        print(result)
+        env.reset();
+
+#result,reward,done=env.takeAction(1.8,1)
+#result,reward,done=env.takeAction(2,1)
+#result,reward,done=env.takeAction(1.9,1)
 # print(env.net.load.iloc[0]['p_mw'])
 # print(env.net.load.iloc[0]['q_mvar'])
 #print(env.loadProfile[0])
