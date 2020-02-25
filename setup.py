@@ -20,6 +20,7 @@ class powerGrid_ieee4:
 
         self.k_old=0;
         self.q_old=0;
+        self.actionSpace = {'v_ref_pu': [i / 100 for i in range(80, 121)], 'lp_ref': [i * 5 for i in range(0, 31)]}
         ## Basic ieee 4bus system
         self.net = pp.networks.case4gs();
         ####Shunt FACTS device (bus 1)
@@ -73,7 +74,7 @@ class powerGrid_ieee4:
         if result == False:
             print('error')
 
-    def takeAction(self, p_ref_pu, v_ref_pu):
+    def takeAction(self, lp_ref, v_ref_pu):
         #q_old = 0
         bus_index_shunt = 1
         line_index=3;
@@ -87,7 +88,7 @@ class powerGrid_ieee4:
         self.net.shunt.q_mvar =  q_comp;
         ##series compensation
         #i_ref = self.net.res_line.loading_percent[line_index];
-        k_x_comp_pu = self.K_x_comp_pu(p_ref_pu, 1, self.k_old);
+        k_x_comp_pu = self.K_x_comp_pu(lp_ref, 1, self.k_old);
         self.k_old = k_x_comp_pu;
         x_line_pu = self.X_pu(line_index)
         self.net.impedance.loc[0, ['xft_pu', 'xtf_pu']] = x_line_pu * k_x_comp_pu
@@ -164,6 +165,8 @@ class powerGrid_ieee4:
         self.stateIndex = np.random.randint(len(self.loadProfile), size=1)[0];
         self.net.switch.at[0, 'closed'] = False
         self.net.switch.at[1, 'closed'] = True
+        self.k_old = 0;
+        self.q_old = 0;
         self.scaleLoadAndPowerValue(self.stateIndex,oldIndex);
 
     def calculateReward(self,voltages):
@@ -273,7 +276,7 @@ class powerGrid_ieee2:
         with open('generatorValuesEvery5mins.pkl', 'rb') as pickle_file:
             self.powerProfile = pickle.load(pickle_file)
 
-        self.actionSpace={'v_ref_pu':[],}
+        self.actionSpace= {'v_ref_pu':[i/100 for i in range(80, 121)], 'lp_ref':[i*5 for i in range(0, 31)] }
         self.k_old = 0;
         self.q_old = 0;
         ## Basic ieee 4bus system
@@ -429,7 +432,7 @@ class powerGrid_ieee2:
         if result == False:
             print('error')
 
-    def takeAction(self, p_ref_pu, v_ref_pu):
+    def takeAction(self, lp_ref, v_ref_pu):
         #q_old = 0
         bus_index_shunt = 1
         line_index=0;
@@ -442,14 +445,14 @@ class powerGrid_ieee2:
         self.q_old=q_comp;
         self.net.shunt.q_mvar =  q_comp;
         ##series compensation
-        k_x_comp_pu = self.K_x_comp_pu(p_ref_pu, 1, self.k_old);
+        k_x_comp_pu = self.K_x_comp_pu(lp_ref, 1, self.k_old);
         self.k_old = k_x_comp_pu;
         x_line_pu=self.X_pu(line_index)
         self.net.impedance.loc[0, ['xft_pu', 'xtf_pu']] = x_line_pu * k_x_comp_pu
         networkFailure = False
         try:
             pp.runpp(self.net);
-            reward = self.calculateReward(self.net.res_bus.vm_pu);
+            reward = self.calculateReward(self.net.res_bus.vm_pu, self.net.res_line.loading_percent);
         except:
             networkFailure=True;
             self.net.shunt.q_mvar=shuntBackup;
@@ -481,18 +484,24 @@ class powerGrid_ieee2:
         self.stateIndex = np.random.randint(len(self.loadProfile), size=1)[0];
         self.net.switch.at[0, 'closed'] = False
         self.net.switch.at[1, 'closed'] = True
+        self.k_old = 0;
+        self.q_old = 0;
         self.scaleLoadAndPowerValue(self.stateIndex,oldIndex);
 
-    def calculateReward(self,voltages):
+    def calculateReward(self, voltages, loadingPercent):
         rew=0;
         for i in range(0,len(voltages)):
             if voltages[i] > 1.25 or voltages[i] < 0.8:
-                rew += 100;
+                rew -= 50;
             elif voltages[i] > 1.05 or voltages[i] < 0.95:
-                rew += 20;
+                rew -= 15;
             else :
-                rew -= 10;
-        return rew;
+                rew += 20;
+        rew = rew/len(voltages)
+        loadingPercentInstability=np.std(loadingPercent) * 10;
+        #print(loadingPercent)
+        #print(loadingPercentInstability)
+        return rew - loadingPercentInstability;
 
     def plotGridFlow(self):
         print('plotting powerflow for the current state')
