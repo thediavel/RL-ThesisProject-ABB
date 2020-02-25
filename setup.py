@@ -20,7 +20,7 @@ class powerGrid_ieee4:
 
         self.k_old=0;
         self.q_old=0;
-        self.actionSpace = {'v_ref_pu': [i / 100 for i in range(80, 121)], 'lp_ref': [i * 5 for i in range(0, 31)]}
+        self.actionSpace = {'v_ref_pu': [i*5 / 100 for i in range(16, 25)], 'lp_ref': [i * 5 for i in range(0, 31)]}
         ## Basic ieee 4bus system
         self.net = pp.networks.case4gs();
         ####Shunt FACTS device (bus 1)
@@ -70,9 +70,13 @@ class powerGrid_ieee4:
         pp.create_sgen(self.net, 3, p_mw=318, q_mvar=181.4, name='static generator', scaling=1)
         self.stateIndex = np.random.randint(len(self.loadProfile), size=1)[0];
         #self.stateIndex=0
-        result = self.scaleLoadAndPowerValue(self.stateIndex,-1);
-        if result == False:
-            print('error')
+        self.scaleLoadAndPowerValue(self.stateIndex,-1);
+        try:
+            pp.runpp(self.net);
+            print('Environment has been successfully initialized');
+        except:
+            print('Some error occured while creating environment');
+            raise Exception('cannot proceed at these settings. Please fix the environment settings');
 
     def takeAction(self, lp_ref, v_ref_pu):
         #q_old = 0
@@ -93,6 +97,20 @@ class powerGrid_ieee4:
         x_line_pu = self.X_pu(line_index)
         self.net.impedance.loc[0, ['xft_pu', 'xtf_pu']] = x_line_pu * k_x_comp_pu
         networkFailure = False
+
+        self.stateIndex += 1;
+        if self.stateIndex < len(self.powerProfile):
+            self.scaleLoadAndPowerValue(self.stateIndex, self.stateIndex - 1);
+            try:
+                pp.runpp(self.net);
+                reward = self.calculateReward(self.net.res_bus.vm_pu, self.net.res_line.loading_percent);
+            except:
+                print('Unstable environment settings');
+                networkFailure = True;
+                reward = -1000;
+
+        return self.net.res_bus, reward, self.stateIndex == len(self.powerProfile) or networkFailure;
+        """
         try:
             pp.runpp(self.net);
             reward = self.calculateReward(self.net.res_bus.vm_pu, self.net.res_line.loading_percent);
@@ -110,7 +128,7 @@ class powerGrid_ieee4:
                 reward = 1000;
                 # self.stateIndex -= 1;
         return self.net.res_bus, reward, self.stateIndex == len(self.powerProfile) or networkFailure;
-
+        """
     ##Function to calculate line reactance in pu
     def X_pu(self, line_index):
         s_base = 100e6
@@ -168,6 +186,12 @@ class powerGrid_ieee4:
         self.k_old = 0;
         self.q_old = 0;
         self.scaleLoadAndPowerValue(self.stateIndex,oldIndex);
+        try:
+            pp.runpp(self.net);
+            print('Environment has been successfully initialized');
+        except:
+            print('Some error occurred while resetting the environment');
+            raise Exception('cannot proceed at these settings. Please fix the environment settings');
 
     def calculateReward(self, voltages, loadingPercent):
         rew = 0;
@@ -196,18 +220,10 @@ class powerGrid_ieee4:
             scalingFactorLoad = self.loadProfile[index] / (sum(self.loadProfile)/len(self.loadProfile));
             scalingFactorPower = self.powerProfile[index] / max(self.powerProfile);
 
-        #print(scalingFactorPower)
-        #print(scalingFactorLoad)
-        #print(index)
         self.net.load.p_mw[1] = self.net.load.p_mw[1] * scalingFactorLoad;
         self.net.load.q_mvar[1] = self.net.load.q_mvar[1] * scalingFactorLoad;
         self.net.sgen.p_mw = self.net.sgen.p_mw * scalingFactorPower;
         self.net.sgen.q_mvar = self.net.sgen.q_mvar * scalingFactorPower;
-        try:
-            pp.runpp(self.net);
-            return True;
-        except:
-            return False;
 
     ##Function for transition from reference power to reactance of "TCSC"
     def K_x_comp_pu(self, loading_perc_ref, line_index, k_old):
@@ -280,7 +296,7 @@ class powerGrid_ieee2:
         with open('generatorValuesEvery5mins.pkl', 'rb') as pickle_file:
             self.powerProfile = pickle.load(pickle_file)
 
-        self.actionSpace= {'v_ref_pu':[i/100 for i in range(80, 121)], 'lp_ref':[i*5 for i in range(0, 31)] }
+        self.actionSpace = {'v_ref_pu': [i*5 / 100 for i in range(16, 25)], 'lp_ref': [i * 5 for i in range(0, 31)]}
         self.k_old = 0;
         self.q_old = 0;
         ## Basic ieee 4bus system
@@ -432,9 +448,13 @@ class powerGrid_ieee2:
         ## select a random state for the episode
         self.stateIndex = np.random.randint(len(self.loadProfile), size=1)[0];
         #self.stateIndex=0
-        result = self.scaleLoadAndPowerValue(self.stateIndex,-1);
-        if result == False:
-            print('error')
+        self.scaleLoadAndPowerValue(self.stateIndex,-1);
+        try:
+            pp.runpp(self.net);
+            print('Environment has been successfully initialized');
+        except:
+            print('Some error occurred while creating environment');
+            raise Exception('cannot proceed at these settings. Please fix the environment settings');
 
     def takeAction(self, lp_ref, v_ref_pu):
         #q_old = 0
@@ -454,6 +474,20 @@ class powerGrid_ieee2:
         x_line_pu=self.X_pu(line_index)
         self.net.impedance.loc[0, ['xft_pu', 'xtf_pu']] = x_line_pu * k_x_comp_pu
         networkFailure = False
+
+        self.stateIndex += 1;
+        if self.stateIndex < len(self.powerProfile):
+            self.scaleLoadAndPowerValue(self.stateIndex, self.stateIndex - 1);
+            try:
+                pp.runpp(self.net);
+                reward = self.calculateReward(self.net.res_bus.vm_pu, self.net.res_line.loading_percent);
+            except:
+                print('Unstable environment settings');
+                networkFailure = True;
+                reward = -1000;
+        return self.net.res_bus, reward, self.stateIndex == len(self.powerProfile) or networkFailure;
+
+        """
         try:
             pp.runpp(self.net);
             reward = self.calculateReward(self.net.res_bus.vm_pu, self.net.res_line.loading_percent);
@@ -471,7 +505,7 @@ class powerGrid_ieee2:
                 reward = 1000;
                 # self.stateIndex -= 1;
         return self.net.res_bus, reward, self.stateIndex == len(self.powerProfile) or networkFailure;
-
+        """
     ##Function to calculate line reactance in pu
     def X_pu(self, line_index):
         s_base = 100e6
@@ -491,6 +525,12 @@ class powerGrid_ieee2:
         self.k_old = 0;
         self.q_old = 0;
         self.scaleLoadAndPowerValue(self.stateIndex,oldIndex);
+        try:
+            pp.runpp(self.net);
+            print('Environment has been successfully initialized');
+        except:
+            print('Some error occurred while resetting the environment');
+            raise Exception('cannot proceed at these settings. Please fix the environment settings');
 
     def calculateReward(self, voltages, loadingPercent):
         rew=0;
@@ -503,8 +543,6 @@ class powerGrid_ieee2:
                 rew += 20;
         rew = rew/len(voltages)
         loadingPercentInstability=np.std(loadingPercent) * 10;
-        #print(loadingPercent)
-        #print(loadingPercentInstability)
         return rew - loadingPercentInstability;
 
     def plotGridFlow(self):
@@ -519,18 +557,11 @@ class powerGrid_ieee2:
             scalingFactorLoad = self.loadProfile[index] / (sum(self.loadProfile)/len(self.loadProfile));
             scalingFactorPower = self.powerProfile[index] / max(self.powerProfile);
 
-        #print(scalingFactorPower)
-        #print(scalingFactorLoad)
-        #print(index)
         self.net.load.p_mw[0] = self.net.load.p_mw[0] * scalingFactorLoad;
         self.net.load.q_mvar[0] = self.net.load.q_mvar[0] * scalingFactorLoad;
         #self.net.sgen.p_mw = self.net.sgen.p_mw * scalingFactorPower;
         #self.net.sgen.q_mvar = self.net.sgen.q_mvar * scalingFactorPower;
-        try:
-            pp.runpp(self.net);
-            return True;
-        except:
-            return False;
+
 
     ##Function for transition from reference power to reactance of "TCSC"
     def K_x_comp_pu(self, loading_perc_ref, line_index, k_old):
