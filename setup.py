@@ -18,8 +18,10 @@ class powerGrid_ieee4:
         with open('generatorValuesEvery5mins.pkl', 'rb') as pickle_file:
             self.powerProfile = pickle.load(pickle_file)
 
+        self.k_old=0;
+        self.q_old=0;
         ## Basic ieee 4bus system
-        self.net = pp.networks.case4gs()
+        self.net = pp.networks.case4gs();
         ####Shunt FACTS device (bus 1)
         # MV bus
         bus_SVC = pp.create_bus(self.net, name='MV SVCtrafo bus', vn_kv=69, type='n', geodata=(-2, 2.5), zone=2,
@@ -72,7 +74,7 @@ class powerGrid_ieee4:
             print('error')
 
     def takeAction(self, p_ref_pu, v_ref_pu):
-        q_old = 0
+        #q_old = 0
         bus_index_shunt = 1
         line_index=3;
         impedenceBackup = self.net.impedance.loc[0, 'xtf_pu'];
@@ -80,12 +82,14 @@ class powerGrid_ieee4:
         self.net.switch.at[1, 'closed'] = False
         self.net.switch.at[0, 'closed'] = True
         ##shunt compenstation
-        q_comp = self.Shunt_q_comp(v_ref_pu, bus_index_shunt, q_old);
+        q_comp = self.Shunt_q_comp(v_ref_pu, bus_index_shunt, self.q_old);
+        self.q_old = q_comp;
         self.net.shunt.q_mvar =  q_comp;
         ##series compensation
-        i_ref = self.net.res_line.loading_percent[line_index];
-        k_x_comp_pu = self.K_x_comp_pu(i_ref, 1, 0);
-        x_line_pu=self.X_pu(line_index)
+        #i_ref = self.net.res_line.loading_percent[line_index];
+        k_x_comp_pu = self.K_x_comp_pu(p_ref_pu, 1, self.k_old);
+        self.k_old = k_x_comp_pu;
+        x_line_pu = self.X_pu(line_index)
         self.net.impedance.loc[0, ['xft_pu', 'xtf_pu']] = x_line_pu * k_x_comp_pu
         networkFailure = False
         try:
@@ -261,7 +265,6 @@ class powerGrid_ieee4:
         return q_comp
 
 
-
 class powerGrid_ieee2:
     def __init__(self):
         print('in init. Here we lay down the grid structure and load some random state values based on IEEE dataset');
@@ -270,6 +273,9 @@ class powerGrid_ieee2:
         with open('generatorValuesEvery5mins.pkl', 'rb') as pickle_file:
             self.powerProfile = pickle.load(pickle_file)
 
+        self.actionSpace={'v_ref_pu':[],}
+        self.k_old = 0;
+        self.q_old = 0;
         ## Basic ieee 4bus system
         net_temp=pp.networks.case4gs();
         # COPY PARAMETERS FROM TEMP NETWORK TO USE IN 2 BUS RADIAL SYSTEM.
@@ -424,7 +430,7 @@ class powerGrid_ieee2:
             print('error')
 
     def takeAction(self, p_ref_pu, v_ref_pu):
-        q_old = 0
+        #q_old = 0
         bus_index_shunt = 1
         line_index=0;
         impedenceBackup = self.net.impedance.loc[0, 'xtf_pu'];
@@ -432,11 +438,12 @@ class powerGrid_ieee2:
         self.net.switch.at[1, 'closed'] = False
         self.net.switch.at[0, 'closed'] = True
         ##shunt compenstation
-        q_comp = self.Shunt_q_comp(v_ref_pu, bus_index_shunt, q_old);
+        q_comp = self.Shunt_q_comp(v_ref_pu, bus_index_shunt, self.q_old);
+        self.q_old=q_comp;
         self.net.shunt.q_mvar =  q_comp;
         ##series compensation
-        i_ref = self.net.res_line.loading_percent[line_index];
-        k_x_comp_pu = self.K_x_comp_pu(i_ref, 1, 0);
+        k_x_comp_pu = self.K_x_comp_pu(p_ref_pu, 1, self.k_old);
+        self.k_old = k_x_comp_pu;
         x_line_pu=self.X_pu(line_index)
         self.net.impedance.loc[0, ['xft_pu', 'xtf_pu']] = x_line_pu * k_x_comp_pu
         networkFailure = False
