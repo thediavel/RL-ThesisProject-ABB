@@ -95,7 +95,7 @@ class powerGrid_ieee4:
         networkFailure = False
         try:
             pp.runpp(self.net);
-            reward = self.calculateReward(self.net.res_bus.vm_pu);
+            reward = self.calculateReward(self.net.res_bus.vm_pu, self.net.res_line.loading_percent);
         except:
             networkFailure=True;
             self.net.shunt.q_mvar=shuntBackup;
@@ -169,16 +169,20 @@ class powerGrid_ieee4:
         self.q_old = 0;
         self.scaleLoadAndPowerValue(self.stateIndex,oldIndex);
 
-    def calculateReward(self,voltages):
-        rew=0;
-        for i in range(0,len(voltages)):
+    def calculateReward(self, voltages, loadingPercent):
+        rew = 0;
+        for i in range(0, len(voltages)):
             if voltages[i] > 1.25 or voltages[i] < 0.8:
-                rew += 100;
+                rew -= 50;
             elif voltages[i] > 1.05 or voltages[i] < 0.95:
+                rew -= 15;
+            else:
                 rew += 20;
-            else :
-                rew -= 10;
-        return rew;
+        rew = rew / len(voltages)
+        loadingPercentInstability = np.std(loadingPercent) * 10;
+        # print(loadingPercent)
+        # print(loadingPercentInstability)
+        return rew - loadingPercentInstability;
 
     def plotGridFlow(self):
         print('plotting powerflow for the current state')
