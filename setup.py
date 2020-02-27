@@ -8,8 +8,10 @@ import pickle
 import math
 import matplotlib.mlab as mlab
 import matplotlib.pyplot as plt
+import pandapower.control as ct
 pd.options.display.float_format = '{:.4g}'.format
 
+#### fix lineIndex in ieee-4
 class powerGrid_ieee4:
     def __init__(self):
         print('in init. Here we lay down the grid structure and load some random state values based on IEEE dataset');
@@ -36,6 +38,9 @@ class powerGrid_ieee4:
                                                          tap_max=9,
                                                          tap_step_percent=1.5, tap_step_degree=0,
                                                          tap_phase_shifter=False)
+
+        trafo_control = ct.DiscreteTapControl(net=self.net, tid=0, vm_lower_pu=0.95, vm_upper_pu=1.05)
+
         # Breaker between grid HV bus and trafo HV bus to connect buses
         sw_SVC = pp.create_switch(self.net, bus=1, element=0, et='t', type='CB', closed=False)
         # Shunt devices connected with MV bus
@@ -72,7 +77,7 @@ class powerGrid_ieee4:
         #self.stateIndex=0
         self.scaleLoadAndPowerValue(self.stateIndex,-1);
         try:
-            pp.runpp(self.net);
+            pp.runpp(self.net, run_control=False)
             print('Environment has been successfully initialized');
         except:
             print('Some error occured while creating environment');
@@ -102,7 +107,7 @@ class powerGrid_ieee4:
         if self.stateIndex < len(self.powerProfile):
             self.scaleLoadAndPowerValue(self.stateIndex, self.stateIndex - 1);
             try:
-                pp.runpp(self.net);
+                pp.runpp(self.net, run_control=True);
                 reward = self.calculateReward(self.net.res_bus.vm_pu, self.net.res_line.loading_percent);
             except:
                 print('Unstable environment settings');
@@ -187,7 +192,7 @@ class powerGrid_ieee4:
         self.q_old = 0;
         self.scaleLoadAndPowerValue(self.stateIndex,oldIndex);
         try:
-            pp.runpp(self.net);
+            pp.runpp(self.net, run_control=False);
             print('Environment has been successfully initialized');
         except:
             print('Some error occurred while resetting the environment');
@@ -416,6 +421,7 @@ class powerGrid_ieee2:
                                                          tap_max=9,
                                                          tap_step_percent=1.5, tap_step_degree=0,
                                                          tap_phase_shifter=False)
+        trafo_control = ct.DiscreteTapControl(net=self.net, tid=0, vm_lower_pu=0.95, vm_upper_pu=1.05)
         # Breaker between grid HV bus and trafo HV bus to connect buses
         sw_SVC = pp.create_switch(self.net, bus=1, element=0, et='t', type='CB', closed=False)
         # Shunt devices connected with MV bus
@@ -449,12 +455,19 @@ class powerGrid_ieee2:
         self.stateIndex = np.random.randint(len(self.loadProfile), size=1)[0];
         #self.stateIndex=0
         self.scaleLoadAndPowerValue(self.stateIndex,-1);
+        #pp.runpp(self.net, run_control=False);
+        #print(self.net.res_bus.vm_pu);
         try:
-            pp.runpp(self.net);
+            pp.runpp(self.net, run_control=False);
             print('Environment has been successfully initialized');
         except:
             print('Some error occurred while creating environment');
             raise Exception('cannot proceed at these settings. Please fix the environment settings');
+
+    def getCurrentState(self):
+        bus_index_shunt = 1
+        line_index = 1;
+        return (self.net.res_bus.vm_pu[bus_index_shunt], self.net.res_line.loading_percent[line_index]);
 
     def takeAction(self, lp_ref, v_ref_pu):
         #q_old = 0
@@ -464,6 +477,7 @@ class powerGrid_ieee2:
         shuntBackup = self.net.shunt.q_mvar
         self.net.switch.at[1, 'closed'] = False
         self.net.switch.at[0, 'closed'] = True
+
         ##shunt compenstation
         q_comp = self.Shunt_q_comp(v_ref_pu, bus_index_shunt, self.q_old);
         self.q_old=q_comp;
@@ -479,7 +493,7 @@ class powerGrid_ieee2:
         if self.stateIndex < len(self.powerProfile):
             self.scaleLoadAndPowerValue(self.stateIndex, self.stateIndex - 1);
             try:
-                pp.runpp(self.net);
+                pp.runpp(self.net, run_control=True);
                 reward = self.calculateReward(self.net.res_bus.vm_pu, self.net.res_line.loading_percent);
             except:
                 print('Unstable environment settings');
@@ -526,7 +540,7 @@ class powerGrid_ieee2:
         self.q_old = 0;
         self.scaleLoadAndPowerValue(self.stateIndex,oldIndex);
         try:
-            pp.runpp(self.net);
+            pp.runpp(self.net, run_control=False);
             print('Environment has been successfully initialized');
         except:
             print('Some error occurred while resetting the environment');
