@@ -109,7 +109,7 @@ class powerGrid_ieee4:
                 networkFailure = True;
                 reward = -1000;
 
-        return self.net.res_bus, reward, self.stateIndex == len(self.powerProfile) or networkFailure;
+        return (self.net.res_bus.vm_pu[bus_index_shunt], self.net.res_line.loading_percent[line_index]), reward, self.stateIndex == len(self.powerProfile) or networkFailure;
         """
         try:
             pp.runpp(self.net);
@@ -203,7 +203,7 @@ class powerGrid_ieee4:
             else:
                 rew += 20;
         rew = rew / len(voltages)
-        loadingPercentInstability = np.std(loadingPercent) * 10;
+        loadingPercentInstability = np.std(loadingPercent) * len(loadingPercent);
         # print(loadingPercent)
         # print(loadingPercentInstability)
         return rew - loadingPercentInstability;
@@ -296,7 +296,7 @@ class powerGrid_ieee2:
         with open('generatorValuesEvery5mins.pkl', 'rb') as pickle_file:
             self.powerProfile = pickle.load(pickle_file)
 
-        self.actionSpace = {'v_ref_pu': [i*5 / 100 for i in range(16, 25)], 'lp_ref': [i * 5 for i in range(0, 31)]}
+        self.actionSpace = {'v_ref_pu': [i*5 / 100 for i in range(16, 25)], 'lp_ref': [i * 15 for i in range(0, 11)]}
         self.k_old = 0;
         self.q_old = 0;
         ## Basic ieee 4bus system
@@ -459,7 +459,7 @@ class powerGrid_ieee2:
     def takeAction(self, lp_ref, v_ref_pu):
         #q_old = 0
         bus_index_shunt = 1
-        line_index=0;
+        line_index=1;
         impedenceBackup = self.net.impedance.loc[0, 'xtf_pu'];
         shuntBackup = self.net.shunt.q_mvar
         self.net.switch.at[1, 'closed'] = False
@@ -485,7 +485,7 @@ class powerGrid_ieee2:
                 print('Unstable environment settings');
                 networkFailure = True;
                 reward = -1000;
-        return self.net.res_bus, reward, self.stateIndex == len(self.powerProfile) or networkFailure;
+        return (self.net.res_bus.vm_pu[bus_index_shunt],self.net.res_line.loading_percent[line_index]), reward, self.stateIndex == len(self.powerProfile) or networkFailure;
 
         """
         try:
@@ -542,7 +542,7 @@ class powerGrid_ieee2:
             else :
                 rew += 20;
         rew = rew/len(voltages)
-        loadingPercentInstability=np.std(loadingPercent) * 10;
+        loadingPercentInstability=np.std(loadingPercent) * len(loadingPercent);
         return rew - loadingPercentInstability;
 
     def plotGridFlow(self):
