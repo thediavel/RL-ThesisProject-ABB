@@ -295,7 +295,7 @@ class powerGrid_ieee4:
 
 class powerGrid_ieee2:
     def __init__(self):
-        print('in init. Here we lay down the grid structure and load some random state values based on IEEE dataset');
+        #print('in init. Here we lay down the grid structure and load some random state values based on IEEE dataset');
         with open('JanLoadEvery5mins.pkl', 'rb') as pickle_file:
             self.loadProfile = pickle.load(pickle_file)
         with open('generatorValuesEvery5mins.pkl', 'rb') as pickle_file:
@@ -453,7 +453,7 @@ class powerGrid_ieee2:
 
         ## select a random state for the episode
         self.stateIndex = np.random.randint(len(self.loadProfile), size=1)[0];
-        #self.stateIndex=0
+        #self.stateIndex=100
         self.scaleLoadAndPowerValue(self.stateIndex,-1);
         #pp.runpp(self.net, run_control=False);
         #print(self.net.res_bus.vm_pu);
@@ -498,8 +498,8 @@ class powerGrid_ieee2:
             except:
                 print('Unstable environment settings');
                 networkFailure = True;
-                reward = -1000;
-        return (self.net.res_bus.vm_pu[bus_index_shunt],self.net.res_line.loading_percent[line_index]), reward, self.stateIndex == len(self.powerProfile) or networkFailure;
+                reward = -10000;
+        return (self.net.res_bus.vm_pu[bus_index_shunt],self.net.res_line.loading_percent[line_index]), reward, self.stateIndex == len(self.powerProfile)-1 or networkFailure;
 
         """
         try:
@@ -531,9 +531,10 @@ class powerGrid_ieee2:
         return x_line_pu
 
     def reset(self):
-        print('reset the current environment for next episode');
+        #print('reset the current environment for next episode');
         oldIndex = self.stateIndex;
         self.stateIndex = np.random.randint(len(self.loadProfile), size=1)[0];
+        #self.stateIndex=100;
         self.net.switch.at[0, 'closed'] = False
         self.net.switch.at[1, 'closed'] = True
         self.k_old = 0;
@@ -541,22 +542,28 @@ class powerGrid_ieee2:
         self.scaleLoadAndPowerValue(self.stateIndex,oldIndex);
         try:
             pp.runpp(self.net, run_control=False);
-            print('Environment has been successfully initialized');
+            #print('Environment has been successfully initialized');
         except:
             print('Some error occurred while resetting the environment');
             raise Exception('cannot proceed at these settings. Please fix the environment settings');
 
     def calculateReward(self, voltages, loadingPercent):
-        rew=0;
-        for i in range(0,len(voltages)):
-            if voltages[i] > 1.25 or voltages[i] < 0.8:
-                rew -= 50;
-            elif voltages[i] > 1.05 or voltages[i] < 0.95:
-                rew -= 15;
-            else :
-                rew += 20;
-        rew = rew/len(voltages)
-        loadingPercentInstability=np.std(loadingPercent) * len(loadingPercent);
+        try:
+            rew=0;
+            for i in range(0,1):
+                if voltages[i] > 1.25 or voltages[i] < 0.8:
+                    rew -= 50;
+                elif voltages[i] > 1.05 or voltages[i] < 0.95:
+                    rew -= 15;
+                else :
+                    rew += 20;
+            rew = rew;
+            loadingPercentInstability=np.std(loadingPercent) * len(loadingPercent);
+        except:
+            print('exception in calculate reward')
+            #print(voltages);
+            #print(loadingPercent)
+            return 0;
         return rew - loadingPercentInstability;
 
     def plotGridFlow(self):
@@ -565,8 +572,8 @@ class powerGrid_ieee2:
 
     def scaleLoadAndPowerValue(self,index,refIndex):
         if refIndex != -1:
-            scalingFactorLoad = self.loadProfile[index]/self.loadProfile[refIndex];
-            scalingFactorPower = self.powerProfile[index] / self.powerProfile[refIndex];
+            scalingFactorLoad = 0 if self.loadProfile[refIndex] == 0 else self.loadProfile[index]/self.loadProfile[refIndex];
+            scalingFactorPower = 0 if self.powerProfile[refIndex]==0 else self.powerProfile[index] / self.powerProfile[refIndex];
         else:
             scalingFactorLoad = self.loadProfile[index] / (sum(self.loadProfile)/len(self.loadProfile));
             scalingFactorPower = self.powerProfile[index] / max(self.powerProfile);
