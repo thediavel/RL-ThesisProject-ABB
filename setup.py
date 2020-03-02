@@ -73,7 +73,7 @@ class powerGrid_ieee4:
                                                  x_ohm_per_km=self.net.line.at[3, 'x_ohm_per_km']);
         self.net.gen.drop(index=[0], inplace=True)  # Drop PV generator
         pp.create_sgen(self.net, 3, p_mw=318, q_mvar=181.4, name='static generator', scaling=1)
-        self.stateIndex = np.random.randint(len(self.loadProfile), size=1)[0];
+        self.stateIndex = np.random.randint(len(self.loadProfile)-1, size=1)[0];
         #self.stateIndex=0
         self.scaleLoadAndPowerValue(self.stateIndex,-1);
         try:
@@ -185,7 +185,7 @@ class powerGrid_ieee4:
     def reset(self):
         print('reset the current environment for next episode');
         oldIndex = self.stateIndex;
-        self.stateIndex = np.random.randint(len(self.loadProfile), size=1)[0];
+        self.stateIndex = np.random.randint(len(self.loadProfile)-1, size=1)[0];
         self.net.switch.at[0, 'closed'] = False
         self.net.switch.at[1, 'closed'] = True
         self.k_old = 0;
@@ -452,7 +452,7 @@ class powerGrid_ieee2:
                                                  x_ohm_per_km=self.net.line.at[1, 'x_ohm_per_km'])
 
         ## select a random state for the episode
-        self.stateIndex = np.random.randint(len(self.loadProfile), size=1)[0];
+        self.stateIndex = np.random.randint(len(self.loadProfile) -1, size=1)[0];
         #self.stateIndex=100
         self.scaleLoadAndPowerValue(self.stateIndex,-1);
         #pp.runpp(self.net, run_control=False);
@@ -488,7 +488,6 @@ class powerGrid_ieee2:
         x_line_pu=self.X_pu(line_index)
         self.net.impedance.loc[0, ['xft_pu', 'xtf_pu']] = x_line_pu * k_x_comp_pu
         networkFailure = False
-
         self.stateIndex += 1;
         if self.stateIndex < len(self.powerProfile):
             self.scaleLoadAndPowerValue(self.stateIndex, self.stateIndex - 1);
@@ -533,8 +532,8 @@ class powerGrid_ieee2:
     def reset(self):
         #print('reset the current environment for next episode');
         oldIndex = self.stateIndex;
-        self.stateIndex = np.random.randint(len(self.loadProfile), size=1)[0];
-        #self.stateIndex=100;
+        self.stateIndex = np.random.randint(len(self.loadProfile) -1, size=1)[0];
+        #self.stateIndex=len(self.loadProfile) -2;
         self.net.switch.at[0, 'closed'] = False
         self.net.switch.at[1, 'closed'] = True
         self.k_old = 0;
@@ -550,7 +549,7 @@ class powerGrid_ieee2:
     def calculateReward(self, voltages, loadingPercent):
         try:
             rew=0;
-            for i in range(0,1):
+            for i in range(1,2):
                 if voltages[i] > 1.25 or voltages[i] < 0.8:
                     rew -= 50;
                 elif voltages[i] > 1.05 or voltages[i] < 0.95:

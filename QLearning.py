@@ -7,6 +7,7 @@ import os
 import  matplotlib.pyplot as plt
 
 voltageRanges=['<0.75','0.75-0-79','0.8-0-84','0.85-0.89','0.9-0.94','0.95-0.99','1-1.04','1.05-1.09','1.1-1.14','1.15-1.19','1.2-1.24','>=1.25'];
+#voltageRanges_2=['<0.85','0.85-0.874','0.875-0.89','0.9-0.924','0.925-0-94','0.95-0.974','0.975.0.99','1-1.024','1.025-1.049','1.05-1.074','1.075-1.1','>=1.1'];
 loadingPercentRange=['0-9','10-19','20-29','30-39','40-49','50-59','60-69','70-79','80-89','90-99','100-109','110-119','120-129','130-139','140-149','150 and above'];
 states=['v:' + x + ';l:' + y for x in voltageRanges for y in loadingPercentRange]
 env_2bus=powerGrid_ieee2();
@@ -40,23 +41,28 @@ if os.path.isfile('pickled_q_table.pkl'):
         allRewards=data['allRewards']
 else:
     q_table = pd.DataFrame(0, index=np.arange(len(actions)), columns=states);
-    epsilon = 0.8
+    epsilon = 1
     allRewards = [];
-numOfEpisodes = 4000
+numOfEpisodes = 12000
 annealingRate=0.98
 numOfSteps = 12
 learningRate = 0.001
 decayRate = 0.9
 #print(q_table['v:0.75-0-79;l:120-129'][0])
+print('epsilon: '+str(epsilon))
+print('Has already been  trained for following num of episodes: '+str(len(allRewards)))
 
 def test(q_table):
     rewards=[]
     env_2bus.reset();
+    count=0;
     for i in q_table:
        if len(q_table[i].unique()) > 1:
-           print(i)
+           print(i);
+           count+=1;
+    print('Number of Unique States Visited: '+ str(count));
       # print(q_table[i].min())
-    for i in range(0,12):
+    for i in range(0,0):
         currentMeasurements = env_2bus.getCurrentState();
         currentState = getStateFromMeasurements(currentMeasurements);
         actionIndex = q_table[currentState].idxmax();
@@ -64,9 +70,9 @@ def test(q_table):
         action = getActionFromIndex(actionIndex);
         nextStateMeasurements, reward, done = env_2bus.takeAction(action[0], action[1]);
         rewards.append(reward);
-    print(sum(rewards))
-    plt.plot(list(range(0, len(rewards))), rewards)
-    plt.show();
+    #print(sum(rewards))
+    #plt.plot(list(range(0, len(rewards))), rewards)
+    #plt.show();
 
 
 def train(numOfEpisodes, annealingRate,epsilon, numOfSteps, learningRate, decayRate):
@@ -98,16 +104,16 @@ def train(numOfEpisodes, annealingRate,epsilon, numOfSteps, learningRate, decayR
             if done:
                 break;
         allRewards.append(accumulatedReward);
-        if i%10 == 0:
-            print('Episode: '+str(i)+'; reward:'+str(accumulatedReward))
-        if i % 50 == 0:
+        if (i+1) %10 == 0:
+            print('Episode: '+str(i+1)+'; reward:'+str(accumulatedReward))
+        if (i+1) % 150 == 0:
             epsilon=annealingRate*epsilon;
             print('saving checkpoint data')
             pickledData={'q_table':q_table, 'e':epsilon, 'allRewards':allRewards}
             pickle.dump(pickledData, open("pickled_q_table.pkl", "wb"))
 
-#train(numOfEpisodes, annealingRate,epsilon, numOfSteps, learningRate, decayRate);
-test(q_table);
+train(numOfEpisodes, annealingRate,epsilon, numOfSteps, learningRate, decayRate);
+#test(q_table);
 
 
 #print(getStateFromMeasurements((0.77,123)))
