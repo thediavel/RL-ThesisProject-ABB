@@ -5,6 +5,7 @@ import math
 import pickle
 import os
 import  matplotlib.pyplot as plt
+import copy
 
 voltageRanges=['<0.75','0.75-0-79','0.8-0-84','0.85-0.89','0.9-0.94','0.95-0.99','1-1.04','1.05-1.09','1.1-1.14','1.15-1.19','1.2-1.24','>=1.25'];
 #voltageRanges_2=['<0.85','0.85-0.874','0.875-0.89','0.9-0.924','0.925-0-94','0.95-0.974','0.975.0.99','1-1.024','1.025-1.049','1.05-1.074','1.075-1.1','>=1.1'];
@@ -29,7 +30,7 @@ def getActionFromIndex(ind):
     actionStringSplitted=actionString.split(';');
     voltage = actionStringSplitted[0].split(':')[1];
     loadingPercent = actionStringSplitted[1].split(':')[1];
-    return((float(voltage), int(loadingPercent)));
+    return((int(loadingPercent),float(voltage) ));
 
 
 if os.path.isfile('pickled_q_table.pkl'):
@@ -74,6 +75,41 @@ def test(q_table):
     #plt.plot(list(range(0, len(rewards))), rewards)
     #plt.show();
 
+def testAllActions(q_table):
+    rewards = []
+    compensation = []
+    env_2bus.reset();
+    #print(env_2bus.net.load)
+    print(env_2bus.net.res_bus.vm_pu[1])
+    print(env_2bus.net.res_line.loading_percent[1])
+    print(env_2bus.net.res_line.loading_percent[0])
+    for i in range(0, len(actions)):
+        copyNetwork=copy.deepcopy(env_2bus);
+        #measurements.append({'v_meas': copyNetwork.net.res_bus.vm_pu[1], 'lp_meas': copyNetwork.net.res_line.loading_percent[1]})
+        #copyNetwork.runEnv()
+        #print(copyNetwork.net.load)
+        #copyNw=powerGrid_ieee2();
+        #copyNw.stateIndex=env_2bus.stateIndex; #Copying stateindex, but load is still radomized from init() to different value than env_2bus
+        #copyNw.scaleLoadAndPowerValue(copyNw.stateIndex, -1);
+        #copyNw.runEnv()
+        #print(copyNw.net.load)
+        action = getActionFromIndex(i);
+        nextStateMeasurements, reward, done = copyNetwork.takeAction(action[0], action[1]);
+        rewards.append(reward);
+        compensation.append({'k':copyNetwork.k_old,'q': copyNetwork.q_old})
+
+    currentMeasurements = env_2bus.getCurrentState();
+    currentState = getStateFromMeasurements(currentMeasurements);
+    actionIndex = q_table[currentState].idxmax();
+    #action = getActionFromIndex(actionIndex);
+    #nextStateMeasurements2, reward2, done2 = env_2bus.takeAction(action[0], action[1]);
+    #print(env_2bus.stateIndex-1)
+    #print(reward2);
+    #print(rewards)
+    print('Reward From Greedy Action '+actions[actionIndex]+' : '+str(rewards[actionIndex]))
+    print(compensation[actionIndex])
+    print('Max Reward Possible: '+str(max(rewards))+' at action: '+actions[rewards.index(max(rewards))]);
+    print(compensation[rewards.index(max(rewards))])
 
 def train(numOfEpisodes, annealingRate,epsilon, numOfSteps, learningRate, decayRate):
     for i in range(0,numOfEpisodes):
@@ -112,9 +148,10 @@ def train(numOfEpisodes, annealingRate,epsilon, numOfSteps, learningRate, decayR
             pickledData={'q_table':q_table, 'e':epsilon, 'allRewards':allRewards}
             pickle.dump(pickledData, open("pickled_q_table.pkl", "wb"))
 
-train(numOfEpisodes, annealingRate,epsilon, numOfSteps, learningRate, decayRate);
+#train(numOfEpisodes, annealingRate,epsilon, numOfSteps, learningRate, decayRate);
 #test(q_table);
-
+for i in range(0,10):
+    testAllActions(q_table)
 
 #print(getStateFromMeasurements((0.77,123)))
 #print(getActionFromIndex(56))

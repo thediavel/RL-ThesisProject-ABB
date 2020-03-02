@@ -452,7 +452,7 @@ class powerGrid_ieee2:
                                                  x_ohm_per_km=self.net.line.at[1, 'x_ohm_per_km'])
 
         ## select a random state for the episode
-        self.stateIndex = np.random.randint(len(self.loadProfile) -1, size=1)[0];
+        self.stateIndex = np.random.randint(len(self.loadProfile)-1, size=1)[0];
         #self.stateIndex=100
         self.scaleLoadAndPowerValue(self.stateIndex,-1);
         #pp.runpp(self.net, run_control=False);
@@ -460,6 +460,14 @@ class powerGrid_ieee2:
         try:
             pp.runpp(self.net, run_control=False);
             print('Environment has been successfully initialized');
+        except:
+            print('Some error occurred while creating environment');
+            raise Exception('cannot proceed at these settings. Please fix the environment settings');
+
+    def runEnv(self):
+        try:
+            pp.runpp(self.net, run_control=False);
+            #print('Environment has been successfully initialized');
         except:
             print('Some error occurred while creating environment');
             raise Exception('cannot proceed at these settings. Please fix the environment settings');
@@ -488,6 +496,7 @@ class powerGrid_ieee2:
         x_line_pu=self.X_pu(line_index)
         self.net.impedance.loc[0, ['xft_pu', 'xtf_pu']] = x_line_pu * k_x_comp_pu
         networkFailure = False
+
         self.stateIndex += 1;
         if self.stateIndex < len(self.powerProfile):
             self.scaleLoadAndPowerValue(self.stateIndex, self.stateIndex - 1);
@@ -498,6 +507,8 @@ class powerGrid_ieee2:
                 print('Unstable environment settings');
                 networkFailure = True;
                 reward = -10000;
+        else:
+            print('wrong block!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
         return (self.net.res_bus.vm_pu[bus_index_shunt],self.net.res_line.loading_percent[line_index]), reward, self.stateIndex == len(self.powerProfile)-1 or networkFailure;
 
         """
@@ -532,8 +543,8 @@ class powerGrid_ieee2:
     def reset(self):
         #print('reset the current environment for next episode');
         oldIndex = self.stateIndex;
-        self.stateIndex = np.random.randint(len(self.loadProfile) -1, size=1)[0];
-        #self.stateIndex=len(self.loadProfile) -2;
+        self.stateIndex = np.random.randint(len(self.loadProfile) - 1, size=1)[0];
+        #self.stateIndex=3729;
         self.net.switch.at[0, 'closed'] = False
         self.net.switch.at[1, 'closed'] = True
         self.k_old = 0;
@@ -586,7 +597,8 @@ class powerGrid_ieee2:
     ##Function for transition from reference power to reactance of "TCSC"
     def K_x_comp_pu(self, loading_perc_ref, line_index, k_old):
         ##NEW VERSION TEST:
-        c = 15  # Coefficient for transition tuned to hit equal load sharing at nominal IEEE
+        c = 5  # Coefficient for transition tuned to hit equal load sharing at nominal IEEE
+        #print((loading_perc_ref,line_index,k_old))
         k_x_comp_max_ind = 0.4
         k_x_comp_max_cap = -k_x_comp_max_ind
         loading_perc_meas = self.net.res_line.loading_percent[line_index]
@@ -606,7 +618,7 @@ class powerGrid_ieee2:
 
     def Shunt_q_comp(self, v_ref_pu, bus_index, q_old):
         v_bus_pu = self.net.res_bus.vm_pu[bus_index]
-        k = 25  # Coefficient for transition, tuned to hit 1 pu with nominal IEEE
+        k = 10  # Coefficient for transition, tuned to hit 1 pu with nominal IEEE
         q_rated = 100  # Mvar
         q_min = -q_rated
         q_max = q_rated
