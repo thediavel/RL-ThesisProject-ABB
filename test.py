@@ -3,7 +3,7 @@ import threading
 import time
 import logging
 
-ql1=qLearning(0.001,0.9,2000,12,1,0.98,150);
+ql1=qLearning(0.001,0.9,30000,12,1,0.98,150);
 #print(ql1.states[0])
 
 #print(ql1.q_table['s1:v_1-1.024_l_0-9;s2:v_0.95-0.974_l_20-29;']);

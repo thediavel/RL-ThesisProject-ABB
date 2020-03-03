@@ -179,6 +179,3 @@ class qLearning:
                     pickle.dump(pickledData, open(self.checkPointName, "wb"))
 
 
-#ql=qLearning(0.001,0.9,2000,12,1,0.98,150);
-#ql.train()
-#ql.test()
