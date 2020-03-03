@@ -77,28 +77,31 @@ class qLearning:
 
     def test(self):
         rewards=[]
-        self.env_2bus.reset();
         count=0;
-        for i in self.q_table:
-           if len(self.q_table[i].unique()) > 1:
-               print(i);
-               count+=1;
-        print('Number of Unique States Visited: '+ str(count));
+        # for i in self.q_table:
+        #    if len(self.q_table[i].unique()) > 1:
+        #        #print(i);
+        #        count+=1;
+        # print('Number of Unique States Visited: '+ str(count));
           # print(q_table[i].min())
-        currentMeasurements = self.env_2bus.getCurrentState();
-        oldMeasurements=currentMeasurements;
-        for i in range(0,12):
-            currentState = self.getStateFromMeasurements_2([oldMeasurements,currentMeasurements]);
-            actionIndex = self.q_table[currentState].idxmax();
-            #print(q_table[currentState].unique())
-            action = self.getActionFromIndex(actionIndex);
+        for j in range(0,100):
+            self.env_2bus.reset();
+            currentMeasurements = self.env_2bus.getCurrentState();
             oldMeasurements=currentMeasurements;
-            currentMeasurements, reward, done = self.env_2bus.takeAction(action[0], action[1]);
-            print(self.env_2bus.net.res_bus.vm_pu)
-            print(self.env_2bus.net.res_line)
-            rewards.append(reward);
-        print(sum(rewards))
-        plt.plot(list(range(0, len(rewards))), rewards)
+            rewardForEp=0;
+            for i in range(0,12):
+                currentState = self.getStateFromMeasurements_2([oldMeasurements,currentMeasurements]);
+                actionIndex = self.q_table[currentState].idxmax();
+                #print(q_table[currentState].unique())
+                action = self.getActionFromIndex(actionIndex);
+                oldMeasurements=currentMeasurements;
+                currentMeasurements, reward, done = self.env_2bus.takeAction(action[0], action[1]);
+                rewardForEp+=reward;
+                #print(self.env_2bus.net.res_bus.vm_pu)
+                #print(self.env_2bus.net.res_line)
+            rewards.append(rewardForEp);
+            #print(sum(rewards))
+        plt.scatter(list(range(0, len(rewards))), rewards)
         plt.show();
 
     def testAllActions(self):
