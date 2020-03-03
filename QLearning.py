@@ -43,9 +43,9 @@ else:
     q_table = pd.DataFrame(0, index=np.arange(len(actions)), columns=states);
     epsilon = 1
     allRewards = [];
-numOfEpisodes = 100000
+numOfEpisodes = 30000
 annealingRate=0.98
-numOfSteps = 1
+numOfSteps = 24
 learningRate = 0.001
 decayRate = 0.9
 #print(q_table['v:0.75-0-79;l:120-129'][0])
@@ -57,7 +57,8 @@ def test(q_table):
        if len(q_table[i].unique()) > 1:
            print(i)
       # print(q_table[i].min())
-    for i in range(0,1):
+    for i in range(0,24):
+
         currentMeasurements = env_2bus.getCurrentState();
         currentState = getStateFromMeasurements(currentMeasurements);
         actionIndex = q_table[currentState].idxmax();
@@ -74,11 +75,13 @@ def test(q_table):
 def testAllActions(q_table):
     rewards = []
     compensation = []
+    measurements = []
     env_2bus.reset();
     #print(env_2bus.net.load)
     print(env_2bus.net.res_bus.vm_pu[1])
     print(env_2bus.net.res_line.loading_percent[1])
     print(env_2bus.net.res_line.loading_percent[0])
+    print(np.std(env_2bus.net.res_line.loading_percent))
     for i in range(0, len(actions)):
         copyNetwork=copy.deepcopy(env_2bus);
         #measurements.append({'v_meas': copyNetwork.net.res_bus.vm_pu[1], 'lp_meas': copyNetwork.net.res_line.loading_percent[1]})
@@ -93,7 +96,7 @@ def testAllActions(q_table):
         nextStateMeasurements, reward, done = copyNetwork.takeAction(action[0], action[1]);
         rewards.append(reward);
         compensation.append({'k':copyNetwork.k_old,'q': copyNetwork.q_old})
-
+        measurements.append({'v_bus1': copyNetwork.net.res_bus.vm_pu[1], 'lp_std': np.std(copyNetwork.net.res_line.loading_percent)})
     currentMeasurements = env_2bus.getCurrentState();
     currentState = getStateFromMeasurements(currentMeasurements);
     actionIndex = q_table[currentState].idxmax();
@@ -106,6 +109,7 @@ def testAllActions(q_table):
     print(compensation[actionIndex])
     print('Max Reward Possible: '+str(max(rewards))+' at action: '+actions[rewards.index(max(rewards))]);
     print(compensation[rewards.index(max(rewards))])
+    print(measurements[actionIndex])
 
 def train(numOfEpisodes, annealingRate,epsilon, numOfSteps, learningRate, decayRate):
     for i in range(0,numOfEpisodes):
@@ -138,16 +142,16 @@ def train(numOfEpisodes, annealingRate,epsilon, numOfSteps, learningRate, decayR
         allRewards.append(accumulatedReward);
         if i%10 == 0:
             print('Episode: '+str(i)+'; reward:'+str(accumulatedReward))
-        if i % 500 == 0:
+        if i % 150 == 0:
             epsilon=annealingRate*epsilon;
             print('saving checkpoint data')
             pickledData={'q_table':q_table, 'e':epsilon, 'allRewards':allRewards}
             pickle.dump(pickledData, open("pickled_q_table.pkl", "wb"))
 
-#train(numOfEpisodes, annealingRate,epsilon, numOfSteps, learningRate, decayRate);
+train(numOfEpisodes, annealingRate,epsilon, numOfSteps, learningRate, decayRate);
 #test(q_table);
-for i in range(0,10):
-    testAllActions(q_table)
+#for i in range(0,10):
+#    testAllActions(q_table)
 
 #print(getStateFromMeasurements((0.77,123)))
 #print(getActionFromIndex(56))

@@ -599,7 +599,7 @@ class powerGrid_ieee2:
     def K_x_comp_pu(self, loading_perc_ref, line_index, k_old):
         ##NEW VERSION TEST:
         c = 5  # Coefficient for transition tuned to hit equal load sharing at nominal IEEE
-        print((loading_perc_ref,line_index,k_old))
+        #print((loading_perc_ref,line_index,k_old))
         k_x_comp_max_ind = 0.4
         k_x_comp_max_cap = -k_x_comp_max_ind
         loading_perc_meas = self.net.res_line.loading_percent[line_index]
