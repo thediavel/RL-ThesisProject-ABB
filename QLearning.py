@@ -80,19 +80,23 @@ def test(q_table):
         #print(q_table[currentState].unique())
         action = getActionFromIndex(actionIndex);
         nextStateMeasurements, reward, done = env_2bus.takeAction(action[0], action[1]);
+        print(env_2bus.net.res_bus.vm_pu)
+        print(env_2bus.net.res_line)
         rewards.append(reward);
-    #print(sum(rewards))
-    #plt.plot(list(range(0, len(rewards))), rewards)
-    #plt.show();
+    print(sum(rewards))
+    plt.plot(list(range(0, len(rewards))), rewards)
+    plt.show();
 
 def testAllActions(q_table):
     rewards = []
     compensation = []
+    measurements = []
     env_2bus.reset();
     #print(env_2bus.net.load)
     print(env_2bus.net.res_bus.vm_pu[1])
     print(env_2bus.net.res_line.loading_percent[1])
     print(env_2bus.net.res_line.loading_percent[0])
+    print(np.std(env_2bus.net.res_line.loading_percent))
     for i in range(0, len(actions)):
         copyNetwork=copy.deepcopy(env_2bus);
         #measurements.append({'v_meas': copyNetwork.net.res_bus.vm_pu[1], 'lp_meas': copyNetwork.net.res_line.loading_percent[1]})
@@ -107,7 +111,7 @@ def testAllActions(q_table):
         nextStateMeasurements, reward, done = copyNetwork.takeAction(action[0], action[1]);
         rewards.append(reward);
         compensation.append({'k':copyNetwork.k_old,'q': copyNetwork.q_old})
-
+        measurements.append({'v_bus1': copyNetwork.net.res_bus.vm_pu[1], 'lp_std': np.std(copyNetwork.net.res_line.loading_percent)})
     currentMeasurements = env_2bus.getCurrentState();
     currentState = getStateFromMeasurements_2(currentMeasurements);
     actionIndex = q_table[currentState].idxmax();
@@ -120,6 +124,7 @@ def testAllActions(q_table):
     print(compensation[actionIndex])
     print('Max Reward Possible: '+str(max(rewards))+' at action: '+actions[rewards.index(max(rewards))]);
     print(compensation[rewards.index(max(rewards))])
+    print(measurements[actionIndex])
 
 def train(numOfEpisodes, annealingRate,epsilon, numOfSteps, learningRate, decayRate):
     for i in range(0,numOfEpisodes):
@@ -158,8 +163,8 @@ def train(numOfEpisodes, annealingRate,epsilon, numOfSteps, learningRate, decayR
             pickledData={'q_table':q_table, 'e':epsilon, 'allRewards':allRewards}
             pickle.dump(pickledData, open("pickled_q_table.pkl", "wb"))
 
-#train(numOfEpisodes, annealingRate,epsilon, numOfSteps, learningRate, decayRate);
-test(q_table);
+train(numOfEpisodes, annealingRate,epsilon, numOfSteps, learningRate, decayRate);
+#test(q_table);
 #for i in range(0,10):
 #    testAllActions(q_table)
 
