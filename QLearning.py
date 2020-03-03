@@ -136,7 +136,6 @@ def train(numOfEpisodes, annealingRate,epsilon, numOfSteps, learningRate, decayR
             currentState=getStateFromMeasurements_2(currentMeasurements);
             if epsComp <= epsilon:
                 # Exploration Part
-
                 actionIndex = np.random.choice(99, 1)[0]
             else:
                 # Greedy Approach
