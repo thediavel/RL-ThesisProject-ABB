@@ -30,10 +30,10 @@ def getStateFromMeasurements_2(voltageLoadingPercent):
     loadingPercent=voltageLoadingPercent[1];
     v_ind = (math.floor(round(voltage * 100) / 2.5) - 33);
     v_ind = v_ind if v_ind >=0 else 0;
-    v_ind = v_ind if v_ind < len(voltageRanges) else len(voltageRanges)-1;
+    v_ind = v_ind if v_ind < len(voltageRanges_2) else len(voltageRanges_2)-1;
     l_ind = (math.floor(round(loadingPercent)/10));
     l_ind = l_ind if l_ind < len(loadingPercentRange) else len(loadingPercentRange)-1;
-    return 'v:'+voltageRanges[v_ind]+';l:'+loadingPercentRange[l_ind];
+    return 'v:'+voltageRanges_2[v_ind]+';l:'+loadingPercentRange[l_ind];
 
 def getActionFromIndex(ind):
     actionString=actions[ind];
@@ -159,7 +159,7 @@ def train(numOfEpisodes, annealingRate,epsilon, numOfSteps, learningRate, decayR
             pickle.dump(pickledData, open("pickled_q_table.pkl", "wb"))
 
 #train(numOfEpisodes, annealingRate,epsilon, numOfSteps, learningRate, decayRate);
-#test(q_table);
+test(q_table);
 #for i in range(0,10):
 #    testAllActions(q_table)
 
