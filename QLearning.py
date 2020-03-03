@@ -4,11 +4,11 @@ import numpy as np
 import math
 import pickle
 import os
-import  matplotlib.pyplot as plt
+import matplotlib.pyplot as plt
 import copy
 
 voltageRanges=['<0.75','0.75-0-79','0.8-0-84','0.85-0.89','0.9-0.94','0.95-0.99','1-1.04','1.05-1.09','1.1-1.14','1.15-1.19','1.2-1.24','>=1.25'];
-#voltageRanges_2=['<0.85','0.85-0.874','0.875-0.89','0.9-0.924','0.925-0-94','0.95-0.974','0.975.0.99','1-1.024','1.025-1.049','1.05-1.074','1.075-1.1','>=1.1'];
+voltageRanges_2=['<0.85','0.85-0.874','0.875-0.899','0.9-0.924','0.925-0-949','0.95-0.974','0.975.0.999','1-1.024','1.025-1.049','1.05-1.074','1.075-1.1','>=1.1'];
 loadingPercentRange=['0-9','10-19','20-29','30-39','40-49','50-59','60-69','70-79','80-89','90-99','100-109','110-119','120-129','130-139','140-149','150 and above'];
 states=['v:' + x + ';l:' + y for x in voltageRanges for y in loadingPercentRange]
 env_2bus=powerGrid_ieee2();
@@ -19,6 +19,16 @@ def getStateFromMeasurements(voltageLoadingPercent):
     voltage=voltageLoadingPercent[0];
     loadingPercent=voltageLoadingPercent[1];
     v_ind = (math.floor(round(voltage * 100) / 5) - 14);
+    v_ind = v_ind if v_ind >=0 else 0;
+    v_ind = v_ind if v_ind < len(voltageRanges) else len(voltageRanges)-1;
+    l_ind = (math.floor(round(loadingPercent)/10));
+    l_ind = l_ind if l_ind < len(loadingPercentRange) else len(loadingPercentRange)-1;
+    return 'v:'+voltageRanges[v_ind]+';l:'+loadingPercentRange[l_ind];
+
+def getStateFromMeasurements_2(voltageLoadingPercent):
+    voltage=voltageLoadingPercent[0];
+    loadingPercent=voltageLoadingPercent[1];
+    v_ind = (math.floor(round(voltage * 100) / 2.5) - 33);
     v_ind = v_ind if v_ind >=0 else 0;
     v_ind = v_ind if v_ind < len(voltageRanges) else len(voltageRanges)-1;
     l_ind = (math.floor(round(loadingPercent)/10));
@@ -44,7 +54,7 @@ else:
     q_table = pd.DataFrame(0, index=np.arange(len(actions)), columns=states);
     epsilon = 1
     allRewards = [];
-numOfEpisodes = 12000
+numOfEpisodes = 30000
 annealingRate=0.98
 numOfSteps = 12
 learningRate = 0.001
@@ -65,7 +75,7 @@ def test(q_table):
       # print(q_table[i].min())
     for i in range(0,0):
         currentMeasurements = env_2bus.getCurrentState();
-        currentState = getStateFromMeasurements(currentMeasurements);
+        currentState = getStateFromMeasurements_2(currentMeasurements);
         actionIndex = q_table[currentState].idxmax();
         #print(q_table[currentState].unique())
         action = getActionFromIndex(actionIndex);
@@ -99,7 +109,7 @@ def testAllActions(q_table):
         compensation.append({'k':copyNetwork.k_old,'q': copyNetwork.q_old})
 
     currentMeasurements = env_2bus.getCurrentState();
-    currentState = getStateFromMeasurements(currentMeasurements);
+    currentState = getStateFromMeasurements_2(currentMeasurements);
     actionIndex = q_table[currentState].idxmax();
     #action = getActionFromIndex(actionIndex);
     #nextStateMeasurements2, reward2, done2 = env_2bus.takeAction(action[0], action[1]);
@@ -118,7 +128,7 @@ def train(numOfEpisodes, annealingRate,epsilon, numOfSteps, learningRate, decayR
         currentMeasurements = env_2bus.getCurrentState();
         for j in range(0,numOfSteps):
             epsComp = np.random.random();
-            currentState=getStateFromMeasurements(currentMeasurements);
+            currentState=getStateFromMeasurements_2(currentMeasurements);
             if epsComp <= epsilon:
                 # Exploration Part
                 actionIndex = np.random.choice(99, 1)[0]
@@ -131,7 +141,7 @@ def train(numOfEpisodes, annealingRate,epsilon, numOfSteps, learningRate, decayR
             if done:
                 nextStateMaxQValue = 0;
             else:
-                nextState = getStateFromMeasurements(nextStateMeasurements);
+                nextState = getStateFromMeasurements_2(nextStateMeasurements);
                 nextStateMaxQValue=q_table[nextState].max();
             #print(reward)
             #print(q_table[currentState][actionIndex] + learningRate * (reward + decayRate * nextStateMaxQValue - q_table[currentState][actionIndex]))
@@ -150,8 +160,8 @@ def train(numOfEpisodes, annealingRate,epsilon, numOfSteps, learningRate, decayR
 
 #train(numOfEpisodes, annealingRate,epsilon, numOfSteps, learningRate, decayRate);
 #test(q_table);
-for i in range(0,10):
-    testAllActions(q_table)
+#for i in range(0,10):
+#    testAllActions(q_table)
 
 #print(getStateFromMeasurements((0.77,123)))
 #print(getActionFromIndex(56))

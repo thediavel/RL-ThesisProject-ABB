@@ -563,10 +563,14 @@ class powerGrid_ieee2:
             for i in range(1,2):
                 if voltages[i] > 1.25 or voltages[i] < 0.8:
                     rew -= 50;
+                elif voltages[i] > 1.1 or voltages[i] < 0.9:
+                    rew -= 25;
                 elif voltages[i] > 1.05 or voltages[i] < 0.95:
-                    rew -= 15;
-                else :
-                    rew += 20;
+                    rew -= 10;
+                elif voltages[i] > 1.025 or voltages[i] < 0.975:
+                    rew += 10;
+                else:
+                    rew+=20;
             rew = rew;
             loadingPercentInstability=np.std(loadingPercent) * len(loadingPercent);
         except:
@@ -679,3 +683,4 @@ def createLoadProfile():
     pickle.dump(JanLoadEvery5mins, open("JanLoadEvery5mins.pkl", "wb"))
 
 #createLoadProfile()
+
