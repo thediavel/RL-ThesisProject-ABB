@@ -10,7 +10,7 @@ import copy
 voltageRanges=['<0.75','0.75-0-79','0.8-0-84','0.85-0.89','0.9-0.94','0.95-0.99','1-1.04','1.05-1.09','1.1-1.14','1.15-1.19','1.2-1.24','>=1.25'];
 voltageRanges_2=['<0.85','0.85-0.874','0.875-0.899','0.9-0.924','0.925-0-949','0.95-0.974','0.975.0.999','1-1.024','1.025-1.049','1.05-1.074','1.075-1.1','>=1.1'];
 loadingPercentRange=['0-9','10-19','20-29','30-39','40-49','50-59','60-69','70-79','80-89','90-99','100-109','110-119','120-129','130-139','140-149','150 and above'];
-states=['v:' + x + ';l:' + y for x in voltageRanges for y in loadingPercentRange]
+states=['v:' + x + ';l:' + y for x in voltageRanges_2 for y in loadingPercentRange]
 env_2bus=powerGrid_ieee2();
 actions=['v_ref:'+str(x)+';lp_ref:'+str(y) for x in env_2bus.actionSpace['v_ref_pu'] for y in env_2bus.actionSpace['lp_ref']]
 
