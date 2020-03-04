@@ -3,7 +3,12 @@ import threading
 import time
 import logging
 
-ql1=qLearning(0.001,0.9,30000,12,1,0.98,150);
+
+############## done training ################
+#ql1=qLearning(0.001,0.9,20100,12,1,0.98,150);
+############## end block ####################
+
+ql1=qLearning(learningRate=0.001,decayRate=0.9,numOfEpisodes=24000,stepsPerEpisode=12,epsilon=1,annealingConstant=0.98,annealAfter=200);
 #print(ql1.states[0])
 
 #print(ql1.q_table['s1:v_1-1.024_l_0-9;s2:v_0.95-0.974_l_20-29;']);
@@ -13,6 +18,7 @@ ql1=qLearning(0.001,0.9,30000,12,1,0.98,150);
 #ql3=qLearning(0.001,0.7,2000,12,1,0.98,150);
 ql1.train();
 #ql1.test()
+#ql1.testAllActions()
 # try:
 #     threads = []
 #     x = threading.Thread(target=ql1.train)

@@ -89,7 +89,7 @@ class qLearning:
             currentMeasurements = self.env_2bus.getCurrentState();
             oldMeasurements=currentMeasurements;
             rewardForEp=0;
-            for i in range(0,12):
+            for i in range(0,self.numOfSteps):
                 currentState = self.getStateFromMeasurements_2([oldMeasurements,currentMeasurements]);
                 actionIndex = self.q_table[currentState].idxmax();
                 #print(q_table[currentState].unique())
@@ -105,48 +105,68 @@ class qLearning:
         plt.show();
 
     def testAllActions(self):
-        rewards = []
-        compensation = []
-        measurements = []
+        allRewards=[];
+        greedyReward=0;
+
         self.env_2bus.reset();
         #print(env_2bus.net.load)
-        print(self.env_2bus.net.res_bus.vm_pu[1])
-        print(self.env_2bus.net.res_line.loading_percent[1])
-        print(self.env_2bus.net.res_line.loading_percent[0])
-        print(np.std(self.env_2bus.net.res_line.loading_percent))
-        for i in range(0, len(self.actions)):
-            copyNetwork=copy.deepcopy(self.env_2bus);
-            #measurements.append({'v_meas': copyNetwork.net.res_bus.vm_pu[1], 'lp_meas': copyNetwork.net.res_line.loading_percent[1]})
-            #copyNetwork.runEnv()
-            #print(copyNetwork.net.load)
-            #copyNw=powerGrid_ieee2();
-            #copyNw.stateIndex=env_2bus.stateIndex; #Copying stateindex, but load is still radomized from init() to different value than env_2bus
-            #copyNw.scaleLoadAndPowerValue(copyNw.stateIndex, -1);
-            #copyNw.runEnv()
-            #print(copyNw.net.load)
-            action = self.getActionFromIndex(i);
-            nextStateMeasurements, reward, done = copyNetwork.takeAction(action[0], action[1]);
-            rewards.append(reward);
-            compensation.append({'k':copyNetwork.k_old,'q': copyNetwork.q_old})
-            measurements.append({'v_bus1': copyNetwork.net.res_bus.vm_pu[1], 'lp_std': np.std(copyNetwork.net.res_line.loading_percent)})
+
         currentMeasurements = self.env_2bus.getCurrentState();
-        currentState = self.getStateFromMeasurements_2([currentMeasurements,currentMeasurements]);
-        actionIndex = self.q_table[currentState].idxmax();
+        oldMeasurements=currentMeasurements;
+        for j in range(0,self.numOfSteps):
+            print('Step: ' + str(j))
+            print('Measurements before taking action ')
+            print('v: '+str(self.env_2bus.net.res_bus.vm_pu[1])+'; lp deviation:  '+str(np.std(self.env_2bus.net.res_line.loading_percent)))
+            #print(self.env_2bus.net.res_line.loading_percent[1])
+            #print(self.env_2bus.net.res_line.loading_percent[0])
+            #print(np.std(self.env_2bus.net.res_line.loading_percent))
+            rewards = [];
+            compensation = []
+            measurements = []
+            for i in range(0, len(self.actions)):
+                copyNetwork=copy.deepcopy(self.env_2bus);
+                #measurements.append({'v_meas': copyNetwork.net.res_bus.vm_pu[1], 'lp_meas': copyNetwork.net.res_line.loading_percent[1]})
+                #copyNetwork.runEnv()
+                #print(copyNetwork.net.load)
+                #copyNw=powerGrid_ieee2();
+                #copyNw.stateIndex=env_2bus.stateIndex; #Copying stateindex, but load is still radomized from init() to different value than env_2bus
+                #copyNw.scaleLoadAndPowerValue(copyNw.stateIndex, -1);
+                #copyNw.runEnv()
+                #print(copyNw.net.load)
+                action = self.getActionFromIndex(i);
+                nextStateMeasurements, reward, done = copyNetwork.takeAction(action[0], action[1]);
+                rewards.append(reward);
+                compensation.append({'k':copyNetwork.k_old,'q': copyNetwork.q_old})
+                measurements.append({'v_bus1': copyNetwork.net.res_bus.vm_pu[1], 'lp_std': np.std(copyNetwork.net.res_line.loading_percent)})
+            allRewards.append(rewards)
+            currentState = self.getStateFromMeasurements_2([oldMeasurements, currentMeasurements]);
+            actionIndex = self.q_table[currentState].idxmax();
+            action = self.getActionFromIndex(actionIndex);
+            oldMeasurements = currentMeasurements;
+            currentMeasurements, reward, done = self.env_2bus.takeAction(action[0], action[1]);
+            print('algorithm reward: '+str(reward));
+            print(compensation[actionIndex])
+            print('max possible reward from all actions: '+str(max(rewards)));
+            print(compensation[rewards.index(max(rewards))])
+            print('Measurements after taking algorithm best action ')
+            print(measurements[actionIndex])
+            greedyReward+=rewards[actionIndex]
         #action = getActionFromIndex(actionIndex);
         #nextStateMeasurements2, reward2, done2 = env_2bus.takeAction(action[0], action[1]);
         #print(env_2bus.stateIndex-1)
         #print(reward2);
         #print(rewards)
-        print('Reward From Greedy Action '+self.actions[actionIndex]+' : '+str(rewards[actionIndex]))
-        print(compensation[actionIndex])
-        print('Max Reward Possible: '+str(max(rewards))+' at action: '+self.actions[rewards.index(max(rewards))]);
-        print(compensation[rewards.index(max(rewards))])
-        print(measurements[actionIndex])
+        print('Reward From Greedy Actions for entire episode using algorithm: '+str(greedyReward))
+
+        print('Max Reward Possible by acting greedily at each step:'+str(sum([max(x) for x in allRewards])))
+
+
 
     def train(self):
             print('epsilon: ' + str(self.epsilon))
             print('Has already been  trained for following num of episodes: ' + str(len(self.allRewards)))
-            for i in range(0,self.numOfEpisodes):
+            noe=self.numOfEpisodes - len(self.allRewards)
+            for i in range(0,noe):
                 accumulatedReward=0;
                 self.env_2bus.reset();
                 currentMeasurements = self.env_2bus.getCurrentState();
@@ -173,12 +193,11 @@ class qLearning:
                     if done:
                         break;
                 self.allRewards.append(accumulatedReward);
-                if (i+1) %100 == 0:
-                    print('Episode: '+str(i+1)+'; reward:'+str(accumulatedReward))
                 if (i+1) % self.annealAfter == 0:
+                    print('Episode: ' + str(len(self.allRewards)) + '; reward:' + str(accumulatedReward))
                     self.epsilon=self.annealingRate*self.epsilon;
                     print('saving checkpoint data')
                     pickledData={'q_table':self.q_table, 'e':self.epsilon, 'allRewards':self.allRewards}
                     pickle.dump(pickledData, open(self.checkPointName, "wb"))
 
-
+            print('training finished')

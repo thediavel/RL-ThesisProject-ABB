@@ -575,8 +575,8 @@ class powerGrid_ieee2:
             loadingPercentInstability=np.std(loadingPercent) * len(loadingPercent);
         except:
             print('exception in calculate reward')
-            #print(voltages);
-            #print(loadingPercent)
+            print(voltages);
+            print(loadingPercent)
             return 0;
         return rew - loadingPercentInstability;
 
