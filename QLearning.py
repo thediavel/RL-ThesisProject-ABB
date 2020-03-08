@@ -160,6 +160,44 @@ class qLearning:
 
         print('Max Reward Possible by acting greedily at each step:'+str(sum([max(x) for x in allRewards])))
 
+    def compareWith(self,models):
+        rewards = [[]];
+        for j in range(0, 100):
+            self.env_2bus.reset();
+            for i in models:
+                oldIndex=i.env_2bus.stateIndex;
+                i.env_2bus.stateIndex=self.env_2bus.stateIndex;
+                i.env_2bus.net.switch.at[0, 'closed'] = False
+                i.env_2bus.net.switch.at[1, 'closed'] = True
+                i.env_2bus.k_old = 0;
+                i.env_2bus.q_old = 0;
+                i.env_2bus.scaleLoadAndPowerValue(self.env_2bus.stateIndex, oldIndex);
+                i.env_2bus.runEnv();
+                if len(rewards) < len(models)+1:
+                    rewards.append([]);
+
+
+            for k in range(0,len(models)+1):
+                currentModel=self if k == len(models) else models[k];
+                currentMeasurements = currentModel.env_2bus.getCurrentState();
+                oldMeasurements = currentMeasurements;
+                rewardForEp = 0;
+                for i in range(0, currentModel.numOfSteps):
+                    currentState = currentModel.getStateFromMeasurements_2([oldMeasurements, currentMeasurements]);
+                    actionIndex = currentModel.q_table[currentState].idxmax();
+                    # print(q_table[currentState].unique())
+                    action = currentModel.getActionFromIndex(actionIndex);
+                    oldMeasurements = currentMeasurements;
+                    currentMeasurements, reward, done = currentModel.env_2bus.takeAction(action[0], action[1]);
+                    rewardForEp += reward;
+                    # print(self.env_2bus.net.res_bus.vm_pu)
+                    # print(self.env_2bus.net.res_line)
+                rewards[k].append(rewardForEp);
+            # print(sum(rewards))
+        plt.plot(list(range(0, len(rewards[0]))), rewards[0],color="chocolate")
+        #plt.show();
+        plt.plot(list(range(0, len(rewards[1]))), rewards[1],  color="green")
+        plt.show();
 
 
     def train(self):
