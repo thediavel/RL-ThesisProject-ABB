@@ -6,6 +6,7 @@ import pickle
 import os
 import matplotlib.pyplot as plt
 import copy
+import statistics as stat
 from datetime import datetime
 
 class qLearning:
@@ -239,3 +240,123 @@ class qLearning:
                     pickle.dump(pickledData, open(self.checkPointName, "wb"))
 
             print('training finished')
+
+    def lp_ref(self):
+        return stat.mean(self.env_2bus.net.res_line.loading_percent)
+
+    def runFACTSnoRL(self, v_ref, lp_ref, bus_index_shunt, bus_index_voltage, line_index):
+        self.env_2bus.net.switch.at[1, 'closed'] = False
+        self.env_2bus.net.switch.at[0, 'closed'] = True
+        ##shunt compenstation
+        q_comp = self.env_2bus.Shunt_q_comp(v_ref, bus_index_shunt, self.env_2bus.q_old);
+        self.env_2bus.q_old = q_comp;
+        self.env_2bus.net.shunt.q_mvar = q_comp;
+        ##series compensation
+        k_x_comp_pu = self.env_2bus.K_x_comp_pu(lp_ref, line_index, self.env_2bus.k_old);
+        self.env_2bus.k_old = k_x_comp_pu;
+        x_line_pu = self.env_2bus.X_pu(line_index)
+        self.env_2bus.net.impedance.loc[0, ['xft_pu', 'xtf_pu']] = x_line_pu * k_x_comp_pu
+        self.env_2bus.runEnv(runControl=True)
+        busVoltage = self.env_2bus.net.res_bus.vm_pu[bus_index_voltage]
+        lp_max = max(self.env_2bus.net.res_line.loading_percent)
+        return busVoltage, lp_max
+
+    def runFACTSgreedyRL(self, busVoltageIndex, currentState):
+        actionIndex = self.q_table[currentState].idxmax()
+        action = self.getActionFromIndex(actionIndex)
+        nextStateMeasurements, reward, done = self.env_2bus.takeAction(action[0], action[1])
+        busVoltage = self.env_2bus.net.res_bus.vm_pu[busVoltageIndex]
+        lp_max = max(self.env_2bus.net.res_line.loading_percent)
+        return nextStateMeasurements, busVoltage, lp_max
+
+    def comparePerformance(self, steps, oper_upd_interval, bus_index_shunt, bus_index_voltage, line_index):
+        v_noFACTS = []
+        lp_max_noFACTS = []
+        v_FACTS = []
+        lp_max_FACTS = []
+        v_RLFACTS = []
+        lp_max_RLFACTS = []
+
+        self.env_2bus.reset()
+        stateIndex = self.env_2bus.stateIndex
+        loadProfile = self.env_2bus.loadProfile
+        while stateIndex + steps > len(loadProfile):
+            self.env_2bus.reset()  # Reset to get sufficient number of steps left in time series
+            stateIndex = self.env_2bus.stateIndex
+            loadProfile = self.env_2bus.loadProfile
+
+        # Need seperate copy for each scenario
+        qObj_env_noFACTS = copy.deepcopy(self)
+        qObj_env_FACTS = copy.deepcopy(self)
+        qObj_env_RLFACTS = copy.deepcopy(self)
+
+        # Initialise states, needed for greedy RL
+        # loading
+        qObj_env_noFACTS.env_2bus.scaleLoadAndPowerValue(stateIndex, stateIndex - 1)
+        qObj_env_FACTS.env_2bus.scaleLoadAndPowerValue(stateIndex, stateIndex - 1)
+        qObj_env_RLFACTS.env_2bus.scaleLoadAndPowerValue(stateIndex, stateIndex - 1)
+        currentMeasurements = qObj_env_RLFACTS.env_2bus.getCurrentState()
+        oldMeasurements = currentMeasurements
+
+        # To plot horizontal axis
+        loading_arr = loadProfile[stateIndex:stateIndex + steps]
+
+        # Loop through each load
+        for i in range(0, steps):
+            # no FACTS
+            qObj_env_noFACTS.env_2bus.runEnv(runControl=False)  # No control of shunt comp transformer as it should be disabled.
+            v_noFACTS.append(qObj_env_noFACTS.env_2bus.net.res_bus.vm_pu[bus_index_voltage])
+            lp_max_noFACTS.append(max(qObj_env_noFACTS.env_2bus.net.res_line.loading_percent))
+
+            # FACTS
+            v_ref = 1
+            if i % oper_upd_interval == 0:
+                lp_reference = qObj_env_FACTS.lp_ref()
+            #print(i)
+            voltage, lp_max = qObj_env_FACTS.runFACTSnoRL(v_ref, lp_reference, bus_index_shunt, bus_index_voltage,
+                                           line_index)  # ERROR LINES:
+            v_FACTS.append(voltage)
+            lp_max_FACTS.append(lp_max)
+
+            # RLFACTS
+            currentState = qObj_env_RLFACTS.getStateFromMeasurements_2([oldMeasurements, currentMeasurements])
+            oldMeasurements = currentMeasurements
+            currentMeasurements, voltage, lp_max = qObj_env_RLFACTS.runFACTSgreedyRL(bus_index_voltage, currentState)  # runpp is done within this function
+            v_RLFACTS.append(voltage)
+            lp_max_RLFACTS.append(lp_max)
+
+            # Increment state
+            stateIndex += 1
+            qObj_env_noFACTS.env_2bus.scaleLoadAndPowerValue(stateIndex, stateIndex - 1)
+            qObj_env_FACTS.env_2bus.scaleLoadAndPowerValue(stateIndex, stateIndex - 1)
+            qObj_env_RLFACTS.env_2bus.scaleLoadAndPowerValue(stateIndex, stateIndex - 1)
+            #print(i)
+
+        # Adjust arrays so indices are overlapping correctly. otherwise the RL will have i+1:th state where rest has i:th state
+        loading_arr.pop(0)
+        v_noFACTS.pop(0)
+        lp_max_noFACTS.pop(0)
+        v_FACTS.pop(0)
+        lp_max_FACTS.pop(0)
+        v_RLFACTS.pop(-1)
+        lp_max_RLFACTS.pop(-1)
+
+        # Make plots
+        i_list = list(range(1, steps))
+        fig, ax1 = plt.subplots()
+        color = 'tab:blue'
+        ax1.set_xlabel('Time series')
+        ax1.set_ylabel('Bus Voltage', color=color)
+        ax1.plot(i_list, v_noFACTS, color=color)
+        ax1.plot(i_list, v_FACTS, color='g')
+        ax1.plot(i_list, v_RLFACTS, color='r')
+        ax1.legend(['v no facts', 'v facts' , 'v RL facts'], loc=2)
+        ax2 = ax1.twinx()
+
+        color = 'tab:blue'
+        ax2.set_ylabel('Max line loading [%]', color='m')
+        ax2.plot(i_list, lp_max_noFACTS, color=color, linestyle = 'dashed')
+        ax2.plot(i_list, lp_max_FACTS, color='g',linestyle = 'dashed')
+        ax2.plot(i_list, lp_max_RLFACTS, color='r', linestyle = 'dashed')
+        ax2.legend(['max lp no facts', 'max lp facts', 'max lp RL facts'], loc=1)
+        plt.show()

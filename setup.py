@@ -464,9 +464,9 @@ class powerGrid_ieee2:
             print('Some error occurred while creating environment');
             raise Exception('cannot proceed at these settings. Please fix the environment settings');
 
-    def runEnv(self):
+    def runEnv(self, runControl):
         try:
-            pp.runpp(self.net, run_control=False);
+            pp.runpp(self.net, run_control=runControl);
             #print('Environment has been successfully initialized');
         except:
             print('Some error occurred while creating environment');
