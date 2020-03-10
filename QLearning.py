@@ -79,11 +79,11 @@ class qLearning:
     def test(self):
         rewards=[]
         count=0;
-        # for i in self.q_table:
-        #    if len(self.q_table[i].unique()) > 1:
-        #        #print(i);
-        #        count+=1;
-        # print('Number of Unique States Visited: '+ str(count));
+        for i in self.q_table:
+           if len(self.q_table[i].unique()) > 1:
+               #print(i);
+               count+=1;
+        print('Number of Unique States Visited: '+ str(count));
           # print(q_table[i].min())
         for j in range(0,100):
             self.env_2bus.reset();
@@ -173,7 +173,7 @@ class qLearning:
                 i.env_2bus.k_old = 0;
                 i.env_2bus.q_old = 0;
                 i.env_2bus.scaleLoadAndPowerValue(self.env_2bus.stateIndex, oldIndex);
-                i.env_2bus.runEnv();
+                i.env_2bus.runEnv(False);
                 if len(rewards) < len(models)+1:
                     rewards.append([]);
 
@@ -298,7 +298,7 @@ class qLearning:
         currentMeasurements = qObj_env_RLFACTS.env_2bus.getCurrentState()
         oldMeasurements = currentMeasurements
 
-        # To plot horizontal axis
+        # To plot horizontal axis in nose-curve
         loading_arr = loadProfile[stateIndex:stateIndex + steps]
 
         # Loop through each load
@@ -360,3 +360,5 @@ class qLearning:
         ax2.plot(i_list, lp_max_RLFACTS, color='r', linestyle = 'dashed')
         ax2.legend(['max lp no facts', 'max lp facts', 'max lp RL facts'], loc=1)
         plt.show()
+
+        # Nosecurve:
