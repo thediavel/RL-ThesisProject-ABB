@@ -10,7 +10,7 @@ import statistics as stat
 from datetime import datetime
 
 class qLearning:
-    def __init__(self, learningRate, decayRate, numOfEpisodes, stepsPerEpisode, epsilon ,annealingConstant, annealAfter):
+    def __init__(self, learningRate, decayRate, numOfEpisodes, stepsPerEpisode, epsilon ,annealingConstant, annealAfter, checkpoint=''):
         self.voltageRanges=['<0.75','0.75-0-79','0.8-0-84','0.85-0.89','0.9-0.94','0.95-0.99','1-1.04','1.05-1.09','1.1-1.14','1.15-1.19','1.2-1.24','>=1.25'];
         self.voltageRanges_2=['<0.85','0.85-0.874','0.875-0.899','0.9-0.924','0.925-0-949','0.95-0.974','0.975.0.999','1-1.024','1.025-1.049','1.05-1.074','1.075-1.1','>=1.1'];
         self.loadingPercentRange=['0-9','10-19','20-29','30-39','40-49','50-59','60-69','70-79','80-89','90-99','100-109','110-119','120-129','130-139','140-149','150 and above'];
@@ -20,13 +20,13 @@ class qLearning:
         self.env_2bus=powerGrid_ieee2();
         self.actions=['v_ref:'+str(x)+';lp_ref:'+str(y) for x in self.env_2bus.actionSpace['v_ref_pu'] for y in self.env_2bus.actionSpace['lp_ref']]
         self.checkPointName='pickled_q_table_lr'+str(learningRate)+'dr'+str(decayRate)+'noe'+str(numOfEpisodes)+'spe'+str(stepsPerEpisode)+'e'+str(epsilon)+'ac'+str(annealingConstant)+'aa'+str(annealAfter)+'.pkl';
-        if os.path.isfile(self.checkPointName):
+        if os.path.isfile(self.checkPointName) or checkpoint!='':
             print('loading data from checkpoint')
-            with open(self.checkPointName, 'rb') as pickle_file:
+            with open(checkpoint if checkpoint != '' else self.checkPointName, 'rb') as pickle_file:
                 data = pickle.load(pickle_file)
-                self.epsilon = data['e'];
+                self.epsilon = data['e'] if checkpoint == '' else epsilon;
                 self.q_table = data['q_table'];
-                self.allRewards = data['allRewards']
+                self.allRewards = data['allRewards'] if checkpoint == '' else [];
         else:
             self.q_table = pd.DataFrame(0, index=np.arange(len(self.actions)), columns=self.states);
             self.epsilon = epsilon
@@ -76,9 +76,10 @@ class qLearning:
         loadingPercent = actionStringSplitted[1].split(':')[1];
         return((int(loadingPercent),float(voltage) ));
 
-    def test(self, episodes,numOfStepsPerEpisode):
+    def test(self, episodes, numOfStepsPerEpisode):
         rewards=[]
         count=0;
+        ul=self.numOfSteps;
         for i in self.q_table:
            if len(self.q_table[i].unique()) > 1:
                #print(i);
@@ -86,21 +87,21 @@ class qLearning:
         print('Number of Unique States Visited: '+ str(count));
           # print(q_table[i].min())
         for j in range(0,episodes):
-            #rewardPerEp=[];
             self.env_2bus.reset();
             currentMeasurements = self.env_2bus.getCurrentState();
             oldMeasurements=currentMeasurements;
             rewardForEp=[];
             for i in range(0,numOfStepsPerEpisode):
                 currentState = self.getStateFromMeasurements_2([oldMeasurements,currentMeasurements]);
-                #print(self.q_table[currentState].unique())
                 actionIndex = self.q_table[currentState].idxmax();
                 #print(q_table[currentState].unique())
                 action = self.getActionFromIndex(actionIndex);
                 oldMeasurements=currentMeasurements;
                 currentMeasurements, reward, done = self.env_2bus.takeAction(action[0], action[1]);
+                # if i == ul-1:
+                #     oldMeasurements = currentMeasurements;
+                #     ul+=self.numOfSteps;
                 rewardForEp.append(reward);
-            #print(rewardForEp)
                 #print(self.env_2bus.net.res_bus.vm_pu)
                 #print(self.env_2bus.net.res_line)
             rewards.append(sum(rewardForEp));
@@ -108,7 +109,7 @@ class qLearning:
         plt.scatter(list(range(0, len(rewards))), rewards)
         plt.show();
 
-    def testAllActions(self):
+    def testAllActions(self, numOfSteps):
         allRewards=[];
         greedyReward=0;
 
@@ -117,7 +118,7 @@ class qLearning:
 
         currentMeasurements = self.env_2bus.getCurrentState();
         oldMeasurements=currentMeasurements;
-        for j in range(0,self.numOfSteps):
+        for j in range(0,numOfSteps):
             print('Step: ' + str(j))
             print('Measurements before taking action ')
             print('v: '+str(self.env_2bus.net.res_bus.vm_pu[1])+'; lp deviation:  '+str(np.std(self.env_2bus.net.res_line.loading_percent)))
@@ -164,9 +165,9 @@ class qLearning:
 
         print('Max Reward Possible by acting greedily at each step:'+str(sum([max(x) for x in allRewards])))
 
-    def compareWith(self,models):
+    def compareWith(self, models, episodes, numOfStepsPerEpisode):
         rewards = [[]];
-        for j in range(0, 100):
+        for j in range(0, episodes):
             self.env_2bus.reset();
             for i in models:
                 oldIndex=i.env_2bus.stateIndex;
@@ -180,13 +181,12 @@ class qLearning:
                 if len(rewards) < len(models)+1:
                     rewards.append([]);
 
-
             for k in range(0,len(models)+1):
                 currentModel=self if k == len(models) else models[k];
                 currentMeasurements = currentModel.env_2bus.getCurrentState();
                 oldMeasurements = currentMeasurements;
                 rewardForEp = 0;
-                for i in range(0, currentModel.numOfSteps):
+                for i in range(0, numOfStepsPerEpisode):
                     currentState = currentModel.getStateFromMeasurements_2([oldMeasurements, currentMeasurements]);
                     actionIndex = currentModel.q_table[currentState].idxmax();
                     # print(q_table[currentState].unique())
@@ -198,9 +198,19 @@ class qLearning:
                     # print(self.env_2bus.net.res_line)
                 rewards[k].append(rewardForEp);
             # print(sum(rewards))
-        plt.plot(list(range(0, len(rewards[0]))), rewards[0],color="chocolate")
-        #plt.show();
-        plt.plot(list(range(0, len(rewards[1]))), rewards[1],  color="green")
+        i_list = list(range(0, len(rewards[0])))
+        fig, ax1 = plt.subplots()
+        color = 'tab:blue'
+        ax1.set_xlabel('Episodes')
+        ax1.set_ylabel('Reward', color=color)
+        ax1.plot(i_list, rewards[0], color=color)
+        ax1.plot(i_list, rewards[1], color='g')
+        #ax1.plot(i_list, v_RLFACTS, color='r')
+        ax1.legend([models[0].checkPointName, self.checkPointName], loc=2)
+        #ax2 = ax1.twinx()
+
+        #plt.plot(list(range(0, len(rewards[0]))), rewards[0],color="red")
+        #plt.plot(list(range(0, len(rewards[1]))), rewards[1],  color="green")
         plt.show();
 
 
@@ -266,10 +276,10 @@ class qLearning:
 
     def runFACTSgreedyRL(self, busVoltageIndex, currentState):
         actionIndex = self.q_table[currentState].idxmax()
-        if len(self.q_table[currentState].unique()) == 1:
-            print(currentState)
-            print(max(self.env_2bus.loadProfile))
-            print(stat.mean(self.env_2bus.loadProfile))
+        #if len(self.q_table[currentState].unique()) == 1:
+        #    print(currentState)
+        #    print(max(self.env_2bus.loadProfile))
+        #    print(stat.mean(self.env_2bus.loadProfile))
         action = self.getActionFromIndex(actionIndex)
         nextStateMeasurements, reward, done = self.env_2bus.takeAction(action[0], action[1])
         busVoltage = self.env_2bus.net.res_bus.vm_pu[busVoltageIndex]

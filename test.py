@@ -1,7 +1,7 @@
 from QLearning import qLearning
-import threading
-import time
-import logging
+# import threading
+# import time
+# import logging
 
 
 ############## done training ################
@@ -15,22 +15,14 @@ import logging
 #ql8=qLearning(learningRate=0.001,decayRate=0.7,numOfEpisodes=288000,stepsPerEpisode=1,epsilon=1,annealingConstant=0.98,annealAfter=2400);
 ############## end block ####################
 
-#ql1=qLearning(learningRate=0.001,decayRate=0.9,numOfEpisodes=24000,stepsPerEpisode=12,epsilon=1,annealingConstant=0.98,annealAfter=200);
-#ql2=qLearning(learningRate=0.001,decayRate=0.9,numOfEpisodes=30000,stepsPerEpisode=12,epsilon=1,annealingConstant=0.98,annealAfter=250);
-#ql1.compareWith([ql2])
-#ql2=qLearning(learningRate=0.001,decayRate=0.7,numOfEpisodes=30000,stepsPerEpisode=12,epsilon=1,annealingConstant=0.98,annealAfter=250);
+#ql9 = qLearning(learningRate = 0.001, decayRate=0.7, numOfEpisodes=25000,stepsPerEpisode=24, epsilon=1, annealingConstant=0.98,annealAfter=200,checkpoint='pickled_q_table_lr0.001dr0.7noe50000spe75e1ac0.98aa400.pkl');
 #print(ql1.states[0])
-#ql1.comparePerformance(steps=24, oper_upd_interval=6, bus_index_shunt=1, bus_index_voltage=1, line_index=1)
-#ql5=qLearning(learningRate=0.001,decayRate=0.7,numOfEpisodes=24000,stepsPerEpisode=12,epsilon=1,annealingConstant=0.98,annealAfter=200);
 
-#ql7.test(2,3)
-#ql6=qLearning(learningRate=0.001,decayRate=0.7,numOfEpisodes=30000,stepsPerEpisode=12,epsilon=1,annealingConstant=0.98,annealAfter=250);
-#ql6.test(50,24);
-#print(ql1.q_table['s1:v_1-1.024_l_0-9;s2:v_0.95-0.974_l_20-29;']);
-ql9=qLearning(learningRate=0.001,decayRate=0.7,numOfEpisodes=180000,stepsPerEpisode=2,epsilon=1,annealingConstant=0.98,annealAfter=1500);
-ql9.train()
+ql10=qLearning(learningRate=0.001,decayRate=0.7,numOfEpisodes=180000,stepsPerEpisode=2,epsilon=1,annealingConstant=0.98,annealAfter=1500);
+ql10.train()
+
 #ql9.test(2,3)
-#ql9.comparePerformance(steps=40, oper_upd_interval=6, bus_index_shunt=1, bus_index_voltage=1, line_index=1)
+#ql10.comparePerformance(steps=40, oper_upd_interval=6, bus_index_shunt=1, bus_index_voltage=1, line_index=1)
 #print(ql1.getStateFromMeasurements_2([(0.85,9),(0.95,9)]))
 #ql2=qLearning(0.001,0.8,2000,12,1,0.98,150);
 #ql3=qLearning(0.001,0.7,2000,12,1,0.98,150);
