@@ -505,6 +505,9 @@ class powerGrid_ieee2:
                 reward = self.calculateReward(self.net.res_bus.vm_pu, self.net.res_line.loading_percent);
             except:
                 print('Unstable environment settings');
+                print(self.stateIndex);
+                print(self.net.load.p_mw[0]);
+                print(self.net.load.q_mvar[0]);
                 networkFailure = True;
                 reward = -10000;
         else:
