@@ -22,11 +22,11 @@ class qLearning:
         self.checkPointName='pickled_q_table_lr'+str(learningRate)+'dr'+str(decayRate)+'noe'+str(numOfEpisodes)+'spe'+str(stepsPerEpisode)+'e'+str(epsilon)+'ac'+str(annealingConstant)+'aa'+str(annealAfter)+'.pkl';
         if os.path.isfile(self.checkPointName) or checkpoint!='':
             print('loading data from checkpoint')
-            with open(checkpoint if checkpoint != '' else self.checkPointName, 'rb') as pickle_file:
+            with open(self.checkPointName if os.path.isfile(self.checkPointName) else checkpoint, 'rb') as pickle_file:
                 data = pickle.load(pickle_file)
-                self.epsilon = data['e'] if checkpoint == '' else epsilon;
+                self.epsilon = data['e'] if os.path.isfile(self.checkPointName) else epsilon;
                 self.q_table = data['q_table'];
-                self.allRewards = data['allRewards'] if checkpoint == '' else [];
+                self.allRewards = data['allRewards'] if os.path.isfile(self.checkPointName) else [];
         else:
             self.q_table = pd.DataFrame(0, index=np.arange(len(self.actions)), columns=self.states);
             self.epsilon = epsilon
