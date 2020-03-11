@@ -76,7 +76,7 @@ class qLearning:
         loadingPercent = actionStringSplitted[1].split(':')[1];
         return((int(loadingPercent),float(voltage) ));
 
-    def test(self):
+    def test(self, episodes,numOfStepsPerEpisode):
         rewards=[]
         count=0;
         for i in self.q_table:
@@ -85,22 +85,25 @@ class qLearning:
                count+=1;
         print('Number of Unique States Visited: '+ str(count));
           # print(q_table[i].min())
-        for j in range(0,100):
+        for j in range(0,episodes):
+            #rewardPerEp=[];
             self.env_2bus.reset();
             currentMeasurements = self.env_2bus.getCurrentState();
             oldMeasurements=currentMeasurements;
-            rewardForEp=0;
-            for i in range(0,self.numOfSteps):
+            rewardForEp=[];
+            for i in range(0,numOfStepsPerEpisode):
                 currentState = self.getStateFromMeasurements_2([oldMeasurements,currentMeasurements]);
+                #print(self.q_table[currentState].unique())
                 actionIndex = self.q_table[currentState].idxmax();
                 #print(q_table[currentState].unique())
                 action = self.getActionFromIndex(actionIndex);
                 oldMeasurements=currentMeasurements;
                 currentMeasurements, reward, done = self.env_2bus.takeAction(action[0], action[1]);
-                rewardForEp+=reward;
+                rewardForEp.append(reward);
+            #print(rewardForEp)
                 #print(self.env_2bus.net.res_bus.vm_pu)
                 #print(self.env_2bus.net.res_line)
-            rewards.append(rewardForEp);
+            rewards.append(sum(rewardForEp));
             #print(sum(rewards))
         plt.scatter(list(range(0, len(rewards))), rewards)
         plt.show();
@@ -244,8 +247,8 @@ class qLearning:
     def lp_ref(self):
         return stat.mean(self.env_2bus.net.res_line.loading_percent)
 
-    def runFACTSnoRL(self, v_ref, lp_ref, bus_index_shunt, bus_index_voltage, line_index):
-        self.env_2bus.net.switch.at[1, 'closed'] = False
+    def runFACTSnoRL(self, v_ref, lp_ref, bus_index_shunt, bus_index_voltage, line_index, series_comp_enabl):
+        self.env_2bus.net.switch.at[1, 'closed'] = False if series_comp_enabl else True
         self.env_2bus.net.switch.at[0, 'closed'] = True
         ##shunt compenstation
         q_comp = self.env_2bus.Shunt_q_comp(v_ref, bus_index_shunt, self.env_2bus.q_old);
@@ -263,6 +266,10 @@ class qLearning:
 
     def runFACTSgreedyRL(self, busVoltageIndex, currentState):
         actionIndex = self.q_table[currentState].idxmax()
+        if len(self.q_table[currentState].unique()) == 1:
+            print(currentState)
+            print(max(self.env_2bus.loadProfile))
+            print(stat.mean(self.env_2bus.loadProfile))
         action = self.getActionFromIndex(actionIndex)
         nextStateMeasurements, reward, done = self.env_2bus.takeAction(action[0], action[1])
         busVoltage = self.env_2bus.net.res_bus.vm_pu[busVoltageIndex]
@@ -276,6 +283,8 @@ class qLearning:
         lp_max_FACTS = []
         v_RLFACTS = []
         lp_max_RLFACTS = []
+        v_FACTS_noSeries = []
+        lp_max_FACTS_noSeries = []
 
         self.env_2bus.reset()
         stateIndex = self.env_2bus.stateIndex
@@ -289,17 +298,15 @@ class qLearning:
         qObj_env_noFACTS = copy.deepcopy(self)
         qObj_env_FACTS = copy.deepcopy(self)
         qObj_env_RLFACTS = copy.deepcopy(self)
+        qObj_env_FACTS_noSeries = copy.deepcopy(self)
 
         # Initialise states, needed for greedy RL
         # loading
-        qObj_env_noFACTS.env_2bus.scaleLoadAndPowerValue(stateIndex, stateIndex - 1)
-        qObj_env_FACTS.env_2bus.scaleLoadAndPowerValue(stateIndex, stateIndex - 1)
-        qObj_env_RLFACTS.env_2bus.scaleLoadAndPowerValue(stateIndex, stateIndex - 1)
         currentMeasurements = qObj_env_RLFACTS.env_2bus.getCurrentState()
         oldMeasurements = currentMeasurements
 
         # To plot horizontal axis in nose-curve
-        loading_arr = loadProfile[stateIndex:stateIndex + steps]
+        loading_arr = list(loadProfile[stateIndex:stateIndex + steps] / stat.mean(loadProfile))
 
         # Loop through each load
         for i in range(0, steps):
@@ -314,9 +321,15 @@ class qLearning:
                 lp_reference = qObj_env_FACTS.lp_ref()
             #print(i)
             voltage, lp_max = qObj_env_FACTS.runFACTSnoRL(v_ref, lp_reference, bus_index_shunt, bus_index_voltage,
-                                           line_index)  # ERROR LINES:
+                                           line_index, True)  # Series compensation enabled
             v_FACTS.append(voltage)
             lp_max_FACTS.append(lp_max)
+
+            # FACTS no Series compensation
+            voltage, lp_max = qObj_env_FACTS_noSeries.runFACTSnoRL(v_ref, lp_reference, bus_index_shunt, bus_index_voltage,
+                                                          line_index, False)  # Series compensation enabled
+            v_FACTS_noSeries.append(voltage)
+            lp_max_FACTS_noSeries.append(lp_max)
 
             # RLFACTS
             currentState = qObj_env_RLFACTS.getStateFromMeasurements_2([oldMeasurements, currentMeasurements])
@@ -330,6 +343,7 @@ class qLearning:
             qObj_env_noFACTS.env_2bus.scaleLoadAndPowerValue(stateIndex, stateIndex - 1)
             qObj_env_FACTS.env_2bus.scaleLoadAndPowerValue(stateIndex, stateIndex - 1)
             qObj_env_RLFACTS.env_2bus.scaleLoadAndPowerValue(stateIndex, stateIndex - 1)
+            qObj_env_FACTS_noSeries.env_2bus.scaleLoadAndPowerValue(stateIndex, stateIndex - 1)
             #print(i)
 
         # Adjust arrays so indices are overlapping correctly. otherwise the RL will have i+1:th state where rest has i:th state
@@ -338,6 +352,8 @@ class qLearning:
         lp_max_noFACTS.pop(0)
         v_FACTS.pop(0)
         lp_max_FACTS.pop(0)
+        v_FACTS_noSeries.pop(0)
+        lp_max_FACTS_noSeries.pop(0)
         v_RLFACTS.pop(-1)
         lp_max_RLFACTS.pop(-1)
 
@@ -349,16 +365,58 @@ class qLearning:
         ax1.set_ylabel('Bus Voltage', color=color)
         ax1.plot(i_list, v_noFACTS, color=color)
         ax1.plot(i_list, v_FACTS, color='g')
+        ax1.plot(i_list, v_FACTS_noSeries, color='k')
         ax1.plot(i_list, v_RLFACTS, color='r')
-        ax1.legend(['v no facts', 'v facts' , 'v RL facts'], loc=2)
+        ax1.legend(['v no facts', 'v facts' , 'v facts no series comp','v RL facts'], loc=2)
         ax2 = ax1.twinx()
 
         color = 'tab:blue'
         ax2.set_ylabel('Max line loading [%]', color='m')
         ax2.plot(i_list, lp_max_noFACTS, color=color, linestyle = 'dashed')
         ax2.plot(i_list, lp_max_FACTS, color='g',linestyle = 'dashed')
-        ax2.plot(i_list, lp_max_RLFACTS, color='r', linestyle = 'dashed')
-        ax2.legend(['max lp no facts', 'max lp facts', 'max lp RL facts'], loc=1)
+        ax2.plot(i_list, v_FACTS_noSeries, color='k', linestyle = 'dashed')
+        ax2.plot(i_list, lp_max_FACTS_noSeries, color='r', linestyle = 'dashed')
+        ax2.legend(['max lp no facts', 'max lp facts', 'max lp facts no series comp', 'max lp RL facts'], loc=1)
         plt.show()
 
         # Nosecurve:
+        loading_arr_sorted = sorted(loading_arr)
+        print(loading_arr_sorted)
+        v_noFACTS_sorted = [x for _, x in sorted(zip(loading_arr, v_noFACTS))]
+        lp_max_noFACTS_sorted = [x for _, x in sorted(zip(loading_arr, lp_max_noFACTS))]
+        v_FACTS_sorted = [x for _, x in sorted(zip(loading_arr, v_FACTS))]
+        lp_max_FACTS_sorted = [x for _, x in sorted(zip(loading_arr, lp_max_FACTS))]
+        v_RLFACTS_sorted = [x for _, x in sorted(zip(loading_arr, v_RLFACTS))]
+        lp_max_RLFACTS_sorted = [x for _, x in sorted(zip(loading_arr, lp_max_RLFACTS))]
+        v_FACTS_noSeries_sorted = [x for _, x in sorted(zip(loading_arr, v_FACTS_noSeries))]
+        lp_max_FACTS_noSeries_sorted = [x for _, x in sorted(zip(loading_arr, lp_max_FACTS_noSeries))]
+
+        #Trim arrays to only include values below 100 % loading percentage
+        lp_limit_for_noseCurve = 100
+        lp_max_noFACTS_sorted_trim = [x for x in lp_max_noFACTS_sorted if x <= lp_limit_for_noseCurve]
+        lp_max_FACTS_sorted_trim = [x for x in lp_max_FACTS_sorted if x <= lp_limit_for_noseCurve]
+        lp_max_RLFACTS_sorted_trim = [x for x in lp_max_RLFACTS_sorted if x <= lp_limit_for_noseCurve]
+        lp_max_FACTS_noSeries_sorted_trim = [x for x in lp_max_FACTS_noSeries_sorted if x <= lp_limit_for_noseCurve]
+
+        v_noFACTS_sorted_trim = v_noFACTS_sorted[0:len(lp_max_noFACTS_sorted_trim)]
+        v_FACTS_sorted_trim = v_FACTS_sorted[0:len(lp_max_FACTS_sorted_trim)]
+        v_RLFACTS_sorted_trim = v_RLFACTS_sorted[0:len(lp_max_RLFACTS_sorted_trim)]
+        v_FACTS_noSeries_sorted_trim = v_FACTS_noSeries_sorted[0:len(lp_max_FACTS_noSeries_sorted_trim)]
+
+        loading_arr_plot_noFACTS = loading_arr_sorted[0:len(lp_max_noFACTS_sorted_trim)]
+        loading_arr_plot_FACTS = loading_arr_sorted[0:len(lp_max_FACTS_sorted_trim)]
+        loading_arr_plot_RLFACTS = loading_arr_sorted[0:len(lp_max_RLFACTS_sorted_trim)]
+        loading_arr_plot_FACTS_noSeries = loading_arr_sorted[0:len(lp_max_FACTS_noSeries_sorted_trim)]
+
+        #Plot Nose Curve
+        fig2 = plt.figure()
+        color = 'tab:blue'
+        plt.plot(loading_arr_plot_noFACTS, v_noFACTS_sorted_trim, Figure=fig2, color=color)
+        plt.plot(loading_arr_plot_FACTS, v_FACTS_sorted_trim, Figure=fig2, color='g')
+        plt.plot(loading_arr_plot_FACTS_noSeries, v_FACTS_noSeries_sorted_trim, Figure=fig2, color='k')
+        plt.plot(loading_arr_plot_RLFACTS, v_RLFACTS_sorted_trim, Figure=fig2, color='r')
+        plt.xlabel('Loading',  Figure=fig2)
+        plt.ylabel('Bus Voltage',  Figure=fig2, color=color)
+        plt.legend(['v no facts', 'v facts', 'v facts no series comp','v RL facts'], loc=2)
+        plt.show()
+
