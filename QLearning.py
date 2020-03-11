@@ -311,7 +311,7 @@ class qLearning:
         currentMeasurements = qObj_env_RLFACTS.env_2bus.getCurrentState()
         oldMeasurements = currentMeasurements
 
-        # To plot horizontal axis
+        # To plot horizontal axis in nose-curve
         loading_arr = loadProfile[stateIndex:stateIndex + steps]
 
         # Loop through each load
@@ -373,3 +373,5 @@ class qLearning:
         ax2.plot(i_list, lp_max_RLFACTS, color='r', linestyle = 'dashed')
         ax2.legend(['max lp no facts', 'max lp facts', 'max lp RL facts'], loc=1)
         plt.show()
+
+        # Nosecurve:
