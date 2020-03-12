@@ -272,7 +272,8 @@ class qLearning:
         self.env_2bus.runEnv(runControl=True)
         busVoltage = self.env_2bus.net.res_bus.vm_pu[bus_index_voltage]
         lp_max = max(self.env_2bus.net.res_line.loading_percent)
-        return busVoltage, lp_max
+        lp_std = np.std(self.env_2bus.net.res_line.loading_percent)
+        return busVoltage, lp_max, lp_std
 
     def runFACTSgreedyRL(self, busVoltageIndex, currentState):
         actionIndex = self.q_table[currentState].idxmax()
@@ -284,17 +285,22 @@ class qLearning:
         nextStateMeasurements, reward, done = self.env_2bus.takeAction(action[0], action[1])
         busVoltage = self.env_2bus.net.res_bus.vm_pu[busVoltageIndex]
         lp_max = max(self.env_2bus.net.res_line.loading_percent)
-        return nextStateMeasurements, busVoltage, lp_max
+        lp_std = np.std(self.env_2bus.net.res_line.loading_percent)
+        return nextStateMeasurements, busVoltage, lp_max, lp_std
 
     def comparePerformance(self, steps, oper_upd_interval, bus_index_shunt, bus_index_voltage, line_index):
         v_noFACTS = []
         lp_max_noFACTS = []
+        lp_std_noFACTS = []
         v_FACTS = []
         lp_max_FACTS = []
+        lp_std_FACTS = []
         v_RLFACTS = []
         lp_max_RLFACTS = []
+        lp_std_RLFACTS = []
         v_FACTS_noSeries = []
         lp_max_FACTS_noSeries = []
+        lp_std_FACTS_noSeries = []
 
         self.env_2bus.reset()
         stateIndex = self.env_2bus.stateIndex
@@ -316,7 +322,8 @@ class qLearning:
         oldMeasurements = currentMeasurements
 
         # To plot horizontal axis in nose-curve
-        loading_arr = list(loadProfile[stateIndex:stateIndex + steps] / stat.mean(loadProfile))
+        load_nom_pu = 2 #the nominal IEEE load in pu
+        loading_arr = list(load_nom_pu*(loadProfile[stateIndex:stateIndex + steps] / stat.mean(loadProfile)))
 
         # Loop through each load
         for i in range(0, steps):
@@ -324,29 +331,33 @@ class qLearning:
             qObj_env_noFACTS.env_2bus.runEnv(runControl=False)  # No control of shunt comp transformer as it should be disabled.
             v_noFACTS.append(qObj_env_noFACTS.env_2bus.net.res_bus.vm_pu[bus_index_voltage])
             lp_max_noFACTS.append(max(qObj_env_noFACTS.env_2bus.net.res_line.loading_percent))
+            lp_std_noFACTS.append(np.std(qObj_env_noFACTS.env_2bus.net.res_line.loading_percent))
 
             # FACTS
             v_ref = 1
             if i % oper_upd_interval == 0:
                 lp_reference = qObj_env_FACTS.lp_ref()
             #print(i)
-            voltage, lp_max = qObj_env_FACTS.runFACTSnoRL(v_ref, lp_reference, bus_index_shunt, bus_index_voltage,
+            voltage, lp_max, lp_std = qObj_env_FACTS.runFACTSnoRL(v_ref, lp_reference, bus_index_shunt, bus_index_voltage,
                                            line_index, True)  # Series compensation enabled
             v_FACTS.append(voltage)
             lp_max_FACTS.append(lp_max)
+            lp_std_FACTS.append(lp_std)
 
             # FACTS no Series compensation
-            voltage, lp_max = qObj_env_FACTS_noSeries.runFACTSnoRL(v_ref, lp_reference, bus_index_shunt, bus_index_voltage,
+            voltage, lp_max, lp_std = qObj_env_FACTS_noSeries.runFACTSnoRL(v_ref, lp_reference, bus_index_shunt, bus_index_voltage,
                                                           line_index, False)  # Series compensation enabled
             v_FACTS_noSeries.append(voltage)
             lp_max_FACTS_noSeries.append(lp_max)
+            lp_std_FACTS_noSeries.append(lp_std)
 
             # RLFACTS
             currentState = qObj_env_RLFACTS.getStateFromMeasurements_2([oldMeasurements, currentMeasurements])
             oldMeasurements = currentMeasurements
-            currentMeasurements, voltage, lp_max = qObj_env_RLFACTS.runFACTSgreedyRL(bus_index_voltage, currentState)  # runpp is done within this function
+            currentMeasurements, voltage, lp_max, lp_std = qObj_env_RLFACTS.runFACTSgreedyRL(bus_index_voltage, currentState)  # runpp is done within this function
             v_RLFACTS.append(voltage)
             lp_max_RLFACTS.append(lp_max)
+            lp_std_RLFACTS.append(lp_std)
 
             # Increment state
             stateIndex += 1
@@ -360,12 +371,16 @@ class qLearning:
         loading_arr.pop(0)
         v_noFACTS.pop(0)
         lp_max_noFACTS.pop(0)
+        lp_std_noFACTS.pop(0)
         v_FACTS.pop(0)
         lp_max_FACTS.pop(0)
+        lp_std_FACTS.pop(0)
         v_FACTS_noSeries.pop(0)
         lp_max_FACTS_noSeries.pop(0)
+        lp_std_FACTS_noSeries.pop(0)
         v_RLFACTS.pop(-1)
         lp_max_RLFACTS.pop(-1)
+        lp_std_RLFACTS.pop(-1)
 
         # Make plots
         i_list = list(range(1, steps))
@@ -381,12 +396,12 @@ class qLearning:
         ax2 = ax1.twinx()
 
         color = 'tab:blue'
-        ax2.set_ylabel('Max line loading [%]', color='m')
-        ax2.plot(i_list, lp_max_noFACTS, color=color, linestyle = 'dashed')
-        ax2.plot(i_list, lp_max_FACTS, color='g',linestyle = 'dashed')
-        ax2.plot(i_list, v_FACTS_noSeries, color='k', linestyle = 'dashed')
-        ax2.plot(i_list, lp_max_FACTS_noSeries, color='r', linestyle = 'dashed')
-        ax2.legend(['max lp no facts', 'max lp facts', 'max lp facts no series comp', 'max lp RL facts'], loc=1)
+        ax2.set_ylabel('line loading percentage std [% units]', color='m')
+        ax2.plot(i_list, lp_std_noFACTS, color=color, linestyle = 'dashed')
+        ax2.plot(i_list, lp_std_FACTS, color='g',linestyle = 'dashed')
+        ax2.plot(i_list, lp_std_FACTS_noSeries, color='k', linestyle = 'dashed')
+        ax2.plot(i_list, lp_std_RLFACTS, color='r', linestyle = 'dashed')
+        ax2.legend(['std lp no facts', 'std lp facts', 'std lp facts no series comp', 'std lp RL facts'], loc=1)
         plt.show()
 
         # Nosecurve:
@@ -425,8 +440,8 @@ class qLearning:
         plt.plot(loading_arr_plot_FACTS, v_FACTS_sorted_trim, Figure=fig2, color='g')
         plt.plot(loading_arr_plot_FACTS_noSeries, v_FACTS_noSeries_sorted_trim, Figure=fig2, color='k')
         plt.plot(loading_arr_plot_RLFACTS, v_RLFACTS_sorted_trim, Figure=fig2, color='r')
-        plt.xlabel('Loading',  Figure=fig2)
-        plt.ylabel('Bus Voltage',  Figure=fig2, color=color)
+        plt.xlabel('Loading [p.u.]',  Figure=fig2)
+        plt.ylabel('Bus Voltage [p.u.]',  Figure=fig2, color=color)
         plt.legend(['v no facts', 'v facts', 'v facts no series comp','v RL facts'], loc=2)
         plt.show()
 
