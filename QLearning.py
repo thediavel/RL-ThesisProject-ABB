@@ -1,3 +1,5 @@
+### Class for Q-learning. Training, testing and compairing.
+
 from setup import powerGrid_ieee2
 import pandas as pd
 import numpy as np
@@ -11,23 +13,30 @@ from datetime import datetime
 
 class qLearning:
     def __init__(self, learningRate, decayRate, numOfEpisodes, stepsPerEpisode, epsilon ,annealingConstant, annealAfter, checkpoint=''):
-        self.voltageRanges=['<0.75','0.75-0-79','0.8-0-84','0.85-0.89','0.9-0.94','0.95-0.99','1-1.04','1.05-1.09','1.1-1.14','1.15-1.19','1.2-1.24','>=1.25'];
+        # Intervals which discretizes measurements into state representation
+        #self.voltageRanges=['<0.75','0.75-0-79','0.8-0-84','0.85-0.89','0.9-0.94','0.95-0.99','1-1.04','1.05-1.09','1.1-1.14','1.15-1.19','1.2-1.24','>=1.25'];
         self.voltageRanges_2=['<0.85','0.85-0.874','0.875-0.899','0.9-0.924','0.925-0-949','0.95-0.974','0.975.0.999','1-1.024','1.025-1.049','1.05-1.074','1.075-1.1','>=1.1'];
         self.loadingPercentRange=['0-9','10-19','20-29','30-39','40-49','50-59','60-69','70-79','80-89','90-99','100-109','110-119','120-129','130-139','140-149','150 and above'];
         self.statesLev1 = ['v_' + x + '_l_' + y for x in self.voltageRanges_2 for y in self.loadingPercentRange]
         self.states=['s1:' + x + ';s2:' + y +';' for x in self.statesLev1 for y in self.statesLev1]
 
+        # initialise environment
         self.env_2bus=powerGrid_ieee2();
+
+        # Possible actions to take, combinations of v_ref into cobinations of lp_ref
         self.actions=['v_ref:'+str(x)+';lp_ref:'+str(y) for x in self.env_2bus.actionSpace['v_ref_pu'] for y in self.env_2bus.actionSpace['lp_ref']]
+
+        # Check if pickle file with current hyperparams exist
         self.checkPointName='pickled_q_table_lr'+str(learningRate)+'dr'+str(decayRate)+'noe'+str(numOfEpisodes)+'spe'+str(stepsPerEpisode)+'e'+str(epsilon)+'ac'+str(annealingConstant)+'aa'+str(annealAfter)+'.pkl';
         if os.path.isfile(self.checkPointName) or checkpoint!='':
             print('loading data from checkpoint')
+            # Load Qtable from pickle file
             with open(self.checkPointName if os.path.isfile(self.checkPointName) else checkpoint, 'rb') as pickle_file:
                 data = pickle.load(pickle_file)
                 self.epsilon = data['e'] if os.path.isfile(self.checkPointName) else epsilon;
                 self.q_table = data['q_table'];
                 self.allRewards = data['allRewards'] if os.path.isfile(self.checkPointName) else [];
-        else:
+        else: # create new Qtable
             self.q_table = pd.DataFrame(0, index=np.arange(len(self.actions)), columns=self.states);
             self.epsilon = epsilon
             self.allRewards = [];
@@ -38,6 +47,7 @@ class qLearning:
         self.decayRate = decayRate
         self.annealAfter=annealAfter
 
+    ## Old version saved for ref. Use getStateFromMeasurements_2
     def getStateFromMeasurements(self, voltageLoadingPercentArray):
         res='';
         count=1;
@@ -53,6 +63,7 @@ class qLearning:
             count+=1
         return res;
 
+    ## Return state representation from measurements
     def getStateFromMeasurements_2(self, voltageLoadingPercentArray):
         res = '';
         count = 1;
@@ -69,6 +80,7 @@ class qLearning:
             count += 1
         return res;
 
+    ## Returns values for v_ref and lp_ref from index in action array
     def getActionFromIndex(self, ind):
         actionString=self.actions[ind];
         actionStringSplitted=actionString.split(';');
@@ -76,6 +88,8 @@ class qLearning:
         loadingPercent = actionStringSplitted[1].split(':')[1];
         return((int(loadingPercent),float(voltage) ));
 
+    ## Test and plot accumulated reward given a number of episodes and steps per episode
+    ## Also prints number of unique states visited
     def test(self, episodes, numOfStepsPerEpisode):
         rewards=[]
         count=0;
@@ -109,6 +123,7 @@ class qLearning:
         plt.scatter(list(range(0, len(rewards))), rewards)
         plt.show();
 
+    ## Compare policy with testing all actions iteratively. (Very expensive)
     def testAllActions(self, numOfSteps):
         allRewards=[];
         greedyReward=0;
@@ -128,6 +143,7 @@ class qLearning:
             rewards = [];
             compensation = []
             measurements = []
+            # Try all actions and store rewards in array
             for i in range(0, len(self.actions)):
                 copyNetwork=copy.deepcopy(self.env_2bus);
                 #measurements.append({'v_meas': copyNetwork.net.res_bus.vm_pu[1], 'lp_meas': copyNetwork.net.res_line.loading_percent[1]})
@@ -165,6 +181,7 @@ class qLearning:
 
         print('Max Reward Possible by acting greedily at each step:'+str(sum([max(x) for x in allRewards])))
 
+    ## Compare Qlearning policy with another wrt reward
     def compareWith(self, models, episodes, numOfStepsPerEpisode):
         rewards = [[]];
         for j in range(0, episodes):
@@ -213,7 +230,7 @@ class qLearning:
         #plt.plot(list(range(0, len(rewards[1]))), rewards[1],  color="green")
         plt.show();
 
-
+    ## Train algorithm
     def train(self):
             print('epsilon: ' + str(self.epsilon))
             print('Has already been  trained for following num of episodes: ' + str(len(self.allRewards)))
@@ -222,7 +239,7 @@ class qLearning:
                 accumulatedReward=0;
                 self.env_2bus.reset();
                 currentMeasurements = self.env_2bus.getCurrentState();
-                oldMeasurements = currentMeasurements;
+                oldMeasurements = currentMeasurements; # current and old same first step of episode
                 for j in range(0,self.numOfSteps):
                     epsComp = np.random.random();
                     currentState=self.getStateFromMeasurements_2([oldMeasurements,currentMeasurements]);
@@ -241,10 +258,12 @@ class qLearning:
                     else:
                         nextState = self.getStateFromMeasurements_2([oldMeasurements,currentMeasurements]);
                         nextStateMaxQValue=self.q_table[nextState].max();
+                    # Update Qvalue for given action:
                     self.q_table.iloc[actionIndex,self.states.index(currentState)] = self.q_table[currentState][actionIndex] + self.learningRate*(reward + self.decayRate*nextStateMaxQValue - self.q_table[currentState][actionIndex])
                     if done:
                         break;
                 self.allRewards.append(accumulatedReward);
+                # Print progress of training with last reward
                 if (i+1) % self.annealAfter == 0:
                     print('Episode: ' + str(len(self.allRewards)) + '; reward:' + str(accumulatedReward))
                     self.epsilon=self.annealingRate*self.epsilon;
@@ -254,9 +273,11 @@ class qLearning:
 
             print('training finished')
 
+    ## Return system operator set reference for series compensation device. Assumed that the mean of all lines is the goal
     def lp_ref(self):
         return stat.mean(self.env_2bus.net.res_line.loading_percent)
 
+    ## Run environment with FACTS but no RL, series compensation TRUE or FALSE
     def runFACTSnoRL(self, v_ref, lp_ref, bus_index_shunt, bus_index_voltage, line_index, series_comp_enabl):
         self.env_2bus.net.switch.at[1, 'closed'] = False if series_comp_enabl else True
         self.env_2bus.net.switch.at[0, 'closed'] = True
@@ -275,6 +296,7 @@ class qLearning:
         lp_std = np.std(self.env_2bus.net.res_line.loading_percent)
         return busVoltage, lp_max, lp_std
 
+    ## Run the environment controlled by greedy RL
     def runFACTSgreedyRL(self, busVoltageIndex, currentState):
         actionIndex = self.q_table[currentState].idxmax()
         #if len(self.q_table[currentState].unique()) == 1:
@@ -288,6 +310,12 @@ class qLearning:
         lp_std = np.std(self.env_2bus.net.res_line.loading_percent)
         return nextStateMeasurements, busVoltage, lp_max, lp_std
 
+    ## Compare performance between 4 scenarios:
+    ## No FACTS
+    ## FACTS no RL (both series and shunt devices)
+    ## FACTS no RL (Only shunt device)
+    ## FACTS RL (Both series and shunt device)
+    ## Makes an adjusted nose-curve of a sorted liading profile.
     def comparePerformance(self, steps, oper_upd_interval, bus_index_shunt, bus_index_voltage, line_index):
         v_noFACTS = []
         lp_max_noFACTS = []
@@ -444,4 +472,50 @@ class qLearning:
         plt.ylabel('Bus Voltage [p.u.]',  Figure=fig2, color=color)
         plt.legend(['v no facts', 'v facts', 'v facts no series comp','v RL facts'], loc=2)
         plt.show()
+
+    # # THIS IS SIDE PROJECT WORK IN PROGRESS. NOT SURE WILL BE COMPLETED
+    # def noseCurve_ramp(self, oper_upd_interval, bus_index_shunt, bus_index_voltage, line_index):
+    #     line_load_limit =  100
+    #     v_noFACTS = []
+    #     lp_max_noFACTS = []
+    #     v_FACTS = []
+    #     lp_max_FACTS = []
+    #     v_RLFACTS = []
+    #     lp_max_RLFACTS = []
+    #     v_FACTS_noSeries = []
+    #     lp_max_FACTS_noSeries = []
+    #
+    #     self.env_2bus.reset()
+    #
+    #     qObj_env_noFACTS = copy.deepcopy(self)
+    #     qObj_env_FACTS = copy.deepcopy(self)
+    #     qObj_env_FACTS_noSeries = copy.deepcopy(self)
+    #     qObj_env_RLFACTS = copy.deepcopy(self)
+    #
+    #     self.env_2bus_q_old = 0
+    #     Pnom = 170
+    #     Qnom = 105.35
+    #     load_start = 0.1*Pnom
+    #     load_increment = 0.01
+    #     load_prev = load_start - load_increment
+    #     stateIndex = 0
+    #     networkFailure = False
+    #
+    #
+    #     while not networkFailure:
+    #         #scaling
+    #         l_scaling = load_prev + load_increment
+    #         load_prev = l_scaling
+    #         qObj_env_noFACTS.env_2bus.net.load.p_mw =
+    #         qObj_env_FACTS =
+    #         qObj_env_FACTS_noSeries =
+    #         qObj_env_RLFACTS =
+    #         try:
+    #
+    #         except:
+    #             networkFailure = True
+
+
+
+
 
