@@ -27,7 +27,7 @@ class qLearning:
         self.actions=['v_ref:'+str(x)+';lp_ref:'+str(y) for x in self.env_2bus.actionSpace['v_ref_pu'] for y in self.env_2bus.actionSpace['lp_ref']]
 
         # Check if pickle file with current hyperparams exist
-        self.checkPointName='pickled_q_table_lr'+str(learningRate)+'dr'+str(decayRate)+'noe'+str(numOfEpisodes)+'spe'+str(stepsPerEpisode)+'e'+str(epsilon)+'ac'+str(annealingConstant)+'aa'+str(annealAfter)+'.pkl';
+        self.checkPointName='pickles_qlearning\pickled_q_table_lr'+str(learningRate)+'dr'+str(decayRate)+'noe'+str(numOfEpisodes)+'spe'+str(stepsPerEpisode)+'e'+str(epsilon)+'ac'+str(annealingConstant)+'aa'+str(annealAfter)+'.pkl';
         if os.path.isfile(self.checkPointName) or checkpoint!='':
             print('loading data from checkpoint')
             # Load Qtable from pickle file

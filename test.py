@@ -15,14 +15,16 @@ from QLearning import qLearning
 #ql8=qLearning(learningRate=0.001,decayRate=0.7,numOfEpisodes=288000,stepsPerEpisode=1,epsilon=1,annealingConstant=0.98,annealAfter=2400);
 ############## end block ####################
 
-#ql9 = qLearning(learningRate = 0.001, decayRate=0.7, numOfEpisodes=25000,stepsPerEpisode=24, epsilon=1, annealingConstant=0.98,annealAfter=200,checkpoint='pickled_q_table_lr0.001dr0.7noe50000spe75e1ac0.98aa400.pkl');
+#l9 = qLearning(learningRate = 0.001, decayRate=0.7, numOfEpisodes=25000,stepsPerEpisode=24, epsilon=1, annealingConstant=0.98,annealAfter=200,checkpoint='pickled_q_table_lr0.001dr0.7noe50000spe75e1ac0.98aa400.pkl');
 #print(ql1.states[0])
 
-ql10=qLearning(learningRate=0.001,decayRate=0.7,numOfEpisodes=180000,stepsPerEpisode=2,epsilon=1,annealingConstant=0.98,annealAfter=1500);
+ql10=qLearning(learningRate=0.001,decayRate=0.7,numOfEpisodes=180000,stepsPerEpisode=2,epsilon=1,annealingConstant=0.98,annealAfter=1500,
+               checkpoint='pickles_qlearning\pickled_q_table_lr0.001dr0.7noe50000spe75e1ac0.98aa400.pkl');
 ql10.train()
+#ql10.comparePerformance(steps=50, oper_upd_interval=6, bus_index_shunt=1, bus_index_voltage=1, line_index=1)
 
 #ql9.test(2,3)
-#ql10.comparePerformance(steps=40, oper_upd_interval=6, bus_index_shunt=1, bus_index_voltage=1, line_index=1)
+
 #print(ql1.getStateFromMeasurements_2([(0.85,9),(0.95,9)]))
 #ql2=qLearning(0.001,0.8,2000,12,1,0.98,150);
 #ql3=qLearning(0.001,0.7,2000,12,1,0.98,150);
