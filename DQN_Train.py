@@ -9,7 +9,7 @@ import os
 
 class DQN:
     def __init__(self, ieeeBusSystem, lr, memorySize, batchSize,  decayRate, numOfEpisodes, stepsPerEpisode, epsilon, annealingConstant, annealAfter):
-        self.eval_net, self.target_net = ieee2_net(12,99), ieee2_net(12,99)
+        self.eval_net, self.target_net = ieee2_net(12,99,0.3), ieee2_net(12,99)
         USE_CUDA = torch.cuda.is_available();
         self.learn_step_counter = 0  # for target updating
         self.memory_counter = 0  # for storing memory
@@ -108,8 +108,6 @@ class DQN:
             accumulatedReward = 0;
             self.env_2bus.reset();
             currentState=[];
-            if self.env_2bus.stateIndex > len(self.env_2bus.loadProfile)-3:
-                continue;
             for j in range(0,3):
                 m=self.env_2bus.getCurrentStateForDQN();
                 currentState.extend(m);

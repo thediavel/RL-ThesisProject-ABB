@@ -19,7 +19,7 @@ class qLearning:
         self.states=['s1:' + x + ';s2:' + y +';' for x in self.statesLev1 for y in self.statesLev1]
 
         # initialise environment
-        self.env_2bus=powerGrid_ieee2();
+        self.env_2bus=powerGrid_ieee2(2);
 
         # Possible actions to take, combinations of v_ref into cobinations of lp_ref
         self.actions=['v_ref:'+str(x)+';lp_ref:'+str(y) for x in self.env_2bus.actionSpace['v_ref_pu'] for y in self.env_2bus.actionSpace['lp_ref']]

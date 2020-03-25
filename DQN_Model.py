@@ -24,16 +24,18 @@ class ieee4_net(nn.Module):
         return self.fc5(x)
 
 class ieee2_net(nn.Module):
-    def __init__(self, inputs, num_actions):
+    def __init__(self, inputs, num_actions,p=0.3):
         super(ieee2_net, self).__init__()
         self.fc1 = nn.Linear(inputs, 24);
         self.fc2 = nn.Linear(24, 36);
         self.fc3 = nn.Linear(36, 72);
         self.fc4 = nn.Linear(72, num_actions)
+        self.drop_layer = nn.Dropout(p=p)
 
     def forward(self, x):
         x = F.relu(self.fc1(x));
         x = F.relu(self.fc2(x));
+        x=self.drop_layer(x);
         x = F.relu(self.fc3(x));
         return self.fc4(x);
 

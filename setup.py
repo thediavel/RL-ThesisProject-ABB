@@ -295,7 +295,7 @@ class powerGrid_ieee4:
 
 
 class powerGrid_ieee2:
-    def __init__(self):
+    def __init__(self,numberOfTimeStepsPerState=4):
         #print('in init. Here we lay down the grid structure and load some random state values based on IEEE dataset');
         with open('JanLoadEvery5mins.pkl', 'rb') as pickle_file:
             self.loadProfile = pickle.load(pickle_file)
@@ -452,8 +452,9 @@ class powerGrid_ieee2:
                                                  type=self.net.line.at[1, 'type'],
                                                  x_ohm_per_km=self.net.line.at[1, 'x_ohm_per_km'])
 
+        self.numberOfTimeStepsPerState=numberOfTimeStepsPerState-1;
         ## select a random state for the episode
-        self.stateIndex = np.random.randint(len(self.loadProfile)-1, size=1)[0];
+        self.stateIndex = np.random.randint(len(self.loadProfile)-self.numberOfTimeStepsPerState, size=1)[0];
         #self.stateIndex=100
         self.scaleLoadAndPowerValue(self.stateIndex,-1);
         #pp.runpp(self.net, run_control=False);
@@ -565,7 +566,7 @@ class powerGrid_ieee2:
     def reset(self):
         #print('reset the current environment for next episode');
         oldIndex = self.stateIndex;
-        self.stateIndex = np.random.randint(len(self.loadProfile) - 1, size=1)[0];
+        self.stateIndex = np.random.randint(len(self.loadProfile) - self.numberOfTimeStepsPerState, size=1)[0];
         #self.stateIndex=3729;
         self.net.switch.at[0, 'closed'] = False
         self.net.switch.at[1, 'closed'] = True
