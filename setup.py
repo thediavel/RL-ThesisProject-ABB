@@ -477,7 +477,13 @@ class powerGrid_ieee2:
         line_index = 1;
         return (self.net.res_bus.vm_pu[bus_index_shunt], self.net.res_line.loading_percent[line_index]);
 
-    def takeAction(self, lp_ref, v_ref_pu):
+    def getCurrentStateForDQN(self):
+        bus_index_shunt = 1
+        line_index = 1;
+        return [self.net.res_bus.vm_pu[bus_index_shunt], self.net.res_line.loading_percent[line_index], self.net.res_bus.va_degree[bus_index_shunt]];
+
+
+    def takeAction(self, lp_ref, v_ref_pu,source=''):
         #q_old = 0
         bus_index_shunt = 1
         line_index=1;
@@ -485,16 +491,16 @@ class powerGrid_ieee2:
         shuntBackup = self.net.shunt.q_mvar
         self.net.switch.at[1, 'closed'] = False
         self.net.switch.at[0, 'closed'] = True
-
-        ##shunt compenstation
-        q_comp = self.Shunt_q_comp(v_ref_pu, bus_index_shunt, self.q_old);
-        self.q_old=q_comp;
-        self.net.shunt.q_mvar =  q_comp;
-        ##series compensation
-        k_x_comp_pu = self.K_x_comp_pu(lp_ref, 1, self.k_old);
-        self.k_old = k_x_comp_pu;
-        x_line_pu=self.X_pu(line_index)
-        self.net.impedance.loc[0, ['xft_pu', 'xtf_pu']] = x_line_pu * k_x_comp_pu
+        if lp_ref != 'na' and v_ref_pu != 'na':
+            ##shunt compenstation
+            q_comp = self.Shunt_q_comp(v_ref_pu, bus_index_shunt, self.q_old);
+            self.q_old=q_comp;
+            self.net.shunt.q_mvar =  q_comp;
+            ##series compensation
+            k_x_comp_pu = self.K_x_comp_pu(lp_ref, 1, self.k_old);
+            self.k_old = k_x_comp_pu;
+            x_line_pu=self.X_pu(line_index)
+            self.net.impedance.loc[0, ['xft_pu', 'xtf_pu']] = x_line_pu * k_x_comp_pu
         networkFailure = False
 
         self.stateIndex += 1;
@@ -502,7 +508,10 @@ class powerGrid_ieee2:
             self.scaleLoadAndPowerValue(self.stateIndex, self.stateIndex - 1);
             try:
                 pp.runpp(self.net, run_control=True);
-                reward = self.calculateReward(self.net.res_bus.vm_pu, self.net.res_line.loading_percent);
+                if source == 'dqn':
+                    reward = self.calculateReward(self.net.res_bus.vm_pu, self.net.res_line.loading_percent,self.net.res_bus.va_degree[bus_index_shunt]);
+                else:
+                    reward = self.calculateReward(self.net.res_bus.vm_pu, self.net.res_line.loading_percent);
             except:
                 print('Unstable environment settings');
                 print(self.stateIndex);
@@ -512,7 +521,10 @@ class powerGrid_ieee2:
                 reward = -10000;
         else:
             print('wrong block!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
-        return (self.net.res_bus.vm_pu[bus_index_shunt],self.net.res_line.loading_percent[line_index]), reward, self.stateIndex == len(self.powerProfile)-1 or networkFailure;
+        s=(self.net.res_bus.vm_pu[bus_index_shunt],self.net.res_line.loading_percent[line_index])
+        if source=='dqn':
+            s=self.getCurrentStateForDQN()
+        return s, reward, self.stateIndex == len(self.powerProfile)-1 or networkFailure;
 
         """
         try:
@@ -560,7 +572,7 @@ class powerGrid_ieee2:
             print('Some error occurred while resetting the environment');
             raise Exception('cannot proceed at these settings. Please fix the environment settings');
 
-    def calculateReward(self, voltages, loadingPercent):
+    def calculateReward(self, voltages, loadingPercent,loadAngle=10):
         try:
             rew=0;
             for i in range(1,2):
@@ -576,12 +588,15 @@ class powerGrid_ieee2:
                     rew+=20;
             rew = rew;
             loadingPercentInstability=np.std(loadingPercent) * len(loadingPercent);
+            rew = rew - loadingPercentInstability;
+            rew=rew if abs(loadAngle)<30 else rew-200;
+            #rew = rew if abs(loadAngle)<30 else (rew - 200)
         except:
             print('exception in calculate reward')
             print(voltages);
             print(loadingPercent)
             return 0;
-        return rew - loadingPercentInstability;
+        return rew ;
 
     def plotGridFlow(self):
         print('plotting powerflow for the current state')

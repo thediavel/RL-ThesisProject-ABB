@@ -275,13 +275,13 @@ class qLearning:
         lp_std = np.std(self.env_2bus.net.res_line.loading_percent)
         return busVoltage, lp_max, lp_std
 
-    def runFACTSgreedyRL(self, busVoltageIndex, currentState):
+    def runFACTSgreedyRL(self, busVoltageIndex, currentState,takeLastAction):
         actionIndex = self.q_table[currentState].idxmax()
-        #if len(self.q_table[currentState].unique()) == 1:
-        #    print(currentState)
-        #    print(max(self.env_2bus.loadProfile))
-        #    print(stat.mean(self.env_2bus.loadProfile))
+        if len(self.q_table[currentState].unique()) == 1:
+            print(currentState)
         action = self.getActionFromIndex(actionIndex)
+        if takeLastAction:
+            action=['na','na']
         nextStateMeasurements, reward, done = self.env_2bus.takeAction(action[0], action[1])
         busVoltage = self.env_2bus.net.res_bus.vm_pu[busVoltageIndex]
         lp_max = max(self.env_2bus.net.res_line.loading_percent)
@@ -353,8 +353,12 @@ class qLearning:
 
             # RLFACTS
             currentState = qObj_env_RLFACTS.getStateFromMeasurements_2([oldMeasurements, currentMeasurements])
+            takeLastAction=False;
+            #if len(self.q_table[currentState].unique()) == 1:
+            #    takeLastAction = True;
+                #currentState = qObj_env_RLFACTS.getStateFromMeasurements_2([currentMeasurements, currentMeasurements])
             oldMeasurements = currentMeasurements
-            currentMeasurements, voltage, lp_max, lp_std = qObj_env_RLFACTS.runFACTSgreedyRL(bus_index_voltage, currentState)  # runpp is done within this function
+            currentMeasurements, voltage, lp_max, lp_std = qObj_env_RLFACTS.runFACTSgreedyRL(bus_index_voltage, currentState, takeLastAction)  # runpp is done within this function
             v_RLFACTS.append(voltage)
             lp_max_RLFACTS.append(lp_max)
             lp_std_RLFACTS.append(lp_std)
