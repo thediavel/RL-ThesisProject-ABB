@@ -1,3 +1,4 @@
+## This script set up classes for 4 bus and 2 bus environment
 import pandapower as pp
 import pandapower.networks as nw
 import pandapower.plotting as plot
@@ -371,9 +372,9 @@ class powerGrid_ieee2:
         line1_r_ohm_per_km = line0_r_ohm_per_km
         line1_to_bus = line0_to_bus
         line1_type = line0_type
-        line1_x_ohm_per_km = line0_x_ohm_per_km * line1_scaling
+        line1_x_ohm_per_km = line0_x_ohm_per_km * line1_scaling # Assume that the lines are identical except for line reactance
 
-        ## creating 2 bus system using nominal values from ieee4 bus system
+        ## creating 2 bus system using nominal values from 4 bus system
         self.net = pp.create_empty_network()
         # Create buses
         b0 = pp.create_bus(self.net, in_service=b0_in_service, max_vm_pu=b0_max_vm_pu, min_vm_pu=b0_min_vm_pu,
@@ -464,6 +465,7 @@ class powerGrid_ieee2:
             print('Some error occurred while creating environment');
             raise Exception('cannot proceed at these settings. Please fix the environment settings');
 
+    # Power flow calculation, runControl = True gives shunt device trafo tap changer iterative control activated
     def runEnv(self, runControl):
         try:
             pp.runpp(self.net, run_control=runControl);
@@ -472,6 +474,7 @@ class powerGrid_ieee2:
             print('Some error occurred while creating environment');
             raise Exception('cannot proceed at these settings. Please fix the environment settings');
 
+    ## Retreieve voltage and line loading percent as measurements of current state
     def getCurrentState(self):
         bus_index_shunt = 1
         line_index = 1;
@@ -482,13 +485,15 @@ class powerGrid_ieee2:
         line_index = 1;
         return [self.net.res_bus.vm_pu[bus_index_shunt], self.net.res_line.loading_percent[line_index], self.net.res_bus.va_degree[bus_index_shunt]];
 
-
-    def takeAction(self, lp_ref, v_ref_pu,source=''):
+    ## Take epsilon-greedy action
+    ## Return next state measurements, reward, done (boolean)
+    def takeAction(self, lp_ref, v_ref_pu):
         #q_old = 0
         bus_index_shunt = 1
         line_index=1;
         impedenceBackup = self.net.impedance.loc[0, 'xtf_pu'];
         shuntBackup = self.net.shunt.q_mvar
+        # Enabling both FACTS devices
         self.net.switch.at[1, 'closed'] = False
         self.net.switch.at[0, 'closed'] = True
         if lp_ref != 'na' and v_ref_pu != 'na':
@@ -545,6 +550,7 @@ class powerGrid_ieee2:
                 # self.stateIndex -= 1;
         return self.net.res_bus, reward, self.stateIndex == len(self.powerProfile) or networkFailure;
         """
+
     ##Function to calculate line reactance in pu
     def X_pu(self, line_index):
         s_base = 100e6
@@ -555,6 +561,7 @@ class powerGrid_ieee2:
         # 2 identical lines with length 0.5 km
         return x_line_pu
 
+    ## Resets environment choosing new starting state, used for beginning of each episode
     def reset(self):
         #print('reset the current environment for next episode');
         oldIndex = self.stateIndex;
@@ -571,7 +578,7 @@ class powerGrid_ieee2:
         except:
             print('Some error occurred while resetting the environment');
             raise Exception('cannot proceed at these settings. Please fix the environment settings');
-
+    ## Calculate immediate reward
     def calculateReward(self, voltages, loadingPercent,loadAngle=10):
         try:
             rew=0;
@@ -598,12 +605,14 @@ class powerGrid_ieee2:
             return 0;
         return rew ;
 
+    ## Simple plot diagram
     def plotGridFlow(self):
         print('plotting powerflow for the current state')
         plot.simple_plot(self.net)
 
+    ## Scale load and generation from load and generation profiles
     def scaleLoadAndPowerValue(self,index,refIndex):
-        if refIndex != -1:
+        if refIndex != -1: # If not first index of load/generation profile
             scalingFactorLoad = 0 if self.loadProfile[refIndex] == 0 else self.loadProfile[index]/self.loadProfile[refIndex];
             scalingFactorPower = 0 if self.powerProfile[refIndex]==0 else self.powerProfile[index] / self.powerProfile[refIndex];
         else:
@@ -616,7 +625,7 @@ class powerGrid_ieee2:
         #self.net.sgen.q_mvar = self.net.sgen.q_mvar * scalingFactorPower;
 
 
-    ##Function for transition from reference power to reactance of "TCSC"
+    ## Transition from reference line loading to reactance of series comp
     def K_x_comp_pu(self, loading_perc_ref, line_index, k_old):
         ##NEW VERSION TEST:
         c = 5  # Coefficient for transition tuned to hit equal load sharing at nominal IEEE
@@ -638,6 +647,7 @@ class powerGrid_ieee2:
             k_x_comp = k_x_comp_max_cap
         return k_x_comp
 
+    ## Transition from reference voltage to Q output of shunt device
     def Shunt_q_comp(self, v_ref_pu, bus_index, q_old):
         v_bus_pu = self.net.res_bus.vm_pu[bus_index]
         k = 10  # Coefficient for transition, tuned to hit 1 pu with nominal IEEE
