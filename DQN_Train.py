@@ -10,6 +10,7 @@ import os
 class DQN:
     def __init__(self, ieeeBusSystem, lr, memorySize, batchSize,  decayRate, numOfEpisodes, stepsPerEpisode, epsilon, annealingConstant, annealAfter):
         self.eval_net, self.target_net = ieee2_net(12,99), ieee2_net(12,99)
+        USE_CUDA = torch.cuda.is_available();
         self.learn_step_counter = 0  # for target updating
         self.memory_counter = 0  # for storing memory
         self.memory_capacity=memorySize;
@@ -43,6 +44,17 @@ class DQN:
             self.memory=checkpoint['memory']
             self.memory_counter=checkpoint['memory_counter']
 
+        if USE_CUDA:
+            print('GPU Exists')
+            self.eval_net.cuda()
+            self.target_net.cuda()
+            for state in self.optimizer.state.values():
+                for k, v in state.items():
+                    if isinstance(v, torch.Tensor):
+                        state[k] = v.cuda()
+            #if next(self.eval_net.parameters()).is_cuda:
+            #    print('done')
+
     def store_transition(self, s, a, r, s_):
         transition = np.hstack((s, [a, r], s_))
         # replace the old memory with new memory
@@ -70,13 +82,16 @@ class DQN:
         # sample batch transitions
         sample_index = np.random.choice(self.memory_capacity, self.batch_size)
         b_memory = self.memory[sample_index, :]
-        b_s = Variable(torch.FloatTensor(b_memory[:, :12]))
-        b_a = Variable(torch.LongTensor(b_memory[:, 12:12 + 1].astype(int)))
-        b_r = Variable(torch.FloatTensor(b_memory[:, 12 + 1:12 + 2]))
-        b_s_ = Variable(torch.FloatTensor(b_memory[:, -12:]))
+        b_s = Variable(torch.FloatTensor(b_memory[:, :12]).cuda())
+        b_a = Variable(torch.LongTensor(b_memory[:, 12:12 + 1].astype(int)).cuda())
+        b_r = Variable(torch.FloatTensor(b_memory[:, 12 + 1:12 + 2]).cuda())
+        b_s_ = Variable(torch.FloatTensor(b_memory[:, -12:]).cuda())
+        #b_s.cuda()
+        #b_a.cuda()
+        #print(b_s.is_cuda)
         # q_eval w.r.t the action in experience
         q_eval = self.eval_net(b_s).gather(1, b_a)  # shape (batch, 1)
-        q_next = self.target_net(b_s_).detach()  # detach from graph, don't backpropagate
+        q_next = self.target_net(b_s_.cuda()).detach()  # detach from graph, don't backpropagate
         q_target = b_r + self.decayRate * (q_next.max(1)[0].unsqueeze(1))  # shape (batch, 1)
         #print(q_target.shape)
         loss = self.loss_func(q_eval, q_target)
@@ -111,9 +126,9 @@ class DQN:
                     actionIndex = np.random.choice(99, 1)[0]
                 else:
                     # Greedy Approach
-                    q_value = self.eval_net.forward(Variable(torch.unsqueeze(torch.FloatTensor(currentState),0)));
+                    q_value = self.eval_net.forward(Variable(torch.unsqueeze(torch.FloatTensor(currentState),0)).cuda());
                     #print(torch.max(q_value, 1)[1].shape)
-                    actionIndex = torch.max(q_value, 1)[1].data.numpy()[0]  # return the argmax
+                    actionIndex = torch.max(q_value, 1)[1].data.cpu().numpy()[0]  # return the argmax
                     #actionIndex = self.q_table[currentState].idxmax();
                 action = self.getActionFromIndex(actionIndex);
                 #oldMeasurements = currentMeasurements;
@@ -157,7 +172,7 @@ class DQN:
 
 
 
-USE_CUDA = torch.cuda.is_available();
+
 #print(USE_CUDA)
 dqn=DQN(2,0.001,2000,64,0.7,25000,12,1,0.98,200)
 dqn.train()

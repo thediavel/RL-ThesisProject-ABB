@@ -487,7 +487,7 @@ class powerGrid_ieee2:
 
     ## Take epsilon-greedy action
     ## Return next state measurements, reward, done (boolean)
-    def takeAction(self, lp_ref, v_ref_pu):
+    def takeAction(self, lp_ref, v_ref_pu,source=''):
         #q_old = 0
         bus_index_shunt = 1
         line_index=1;
