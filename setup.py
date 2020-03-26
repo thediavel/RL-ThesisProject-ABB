@@ -329,7 +329,7 @@ class powerGrid_ieee4:
 
 
 class powerGrid_ieee2:
-    def __init__(self):
+    def __init__(self,numberOfTimeStepsPerState=4):
         #print('in init. Here we lay down the grid structure and load some random state values based on IEEE dataset');
         with open('JanLoadEvery5mins.pkl', 'rb') as pickle_file:
             self.loadProfile = pickle.load(pickle_file)
@@ -486,8 +486,9 @@ class powerGrid_ieee2:
                                                  type=self.net.line.at[1, 'type'],
                                                  x_ohm_per_km=self.net.line.at[1, 'x_ohm_per_km'])
 
+        self.numberOfTimeStepsPerState=numberOfTimeStepsPerState-1;
         ## select a random state for the episode
-        self.stateIndex = np.random.randint(len(self.loadProfile)-1, size=1)[0];
+        self.stateIndex = np.random.randint(len(self.loadProfile)-self.numberOfTimeStepsPerState, size=1)[0];
         #self.stateIndex=100
         self.scaleLoadAndPowerValue(self.stateIndex,-1);
         #pp.runpp(self.net, run_control=False);
@@ -498,6 +499,7 @@ class powerGrid_ieee2:
         except:
             print('Some error occurred while creating environment');
             raise Exception('cannot proceed at these settings. Please fix the environment settings');
+
     # Power flow calculation, runControl = True gives shunt device trafo tap changer iterative control activated
     def runEnv(self, runControl):
         try:
@@ -513,9 +515,14 @@ class powerGrid_ieee2:
         line_index = 1;
         return (self.net.res_bus.vm_pu[bus_index_shunt], self.net.res_line.loading_percent[line_index]);
 
+    def getCurrentStateForDQN(self):
+        bus_index_shunt = 1
+        line_index = 1;
+        return [self.net.res_bus.vm_pu[bus_index_shunt], self.net.res_line.loading_percent[line_index], self.net.res_bus.va_degree[bus_index_shunt]];
+
     ## Take epsilon-greedy action
     ## Return next state measurements, reward, done (boolean)
-    def takeAction(self, lp_ref, v_ref_pu):
+    def takeAction(self, lp_ref, v_ref_pu,source=''):
         #q_old = 0
         bus_index_shunt = 1
         line_index=1;
@@ -524,16 +531,16 @@ class powerGrid_ieee2:
         # Enabling both FACTS devices
         self.net.switch.at[1, 'closed'] = False
         self.net.switch.at[0, 'closed'] = True
-
-        ##shunt compenstation
-        q_comp = self.Shunt_q_comp(v_ref_pu, bus_index_shunt, self.q_old);
-        self.q_old=q_comp;
-        self.net.shunt.q_mvar =  q_comp;
-        ##series compensation
-        k_x_comp_pu = self.K_x_comp_pu(lp_ref, 1, self.k_old);
-        self.k_old = k_x_comp_pu;
-        x_line_pu=self.X_pu(line_index)
-        self.net.impedance.loc[0, ['xft_pu', 'xtf_pu']] = x_line_pu * k_x_comp_pu
+        if lp_ref != 'na' and v_ref_pu != 'na':
+            ##shunt compenstation
+            q_comp = self.Shunt_q_comp(v_ref_pu, bus_index_shunt, self.q_old);
+            self.q_old=q_comp;
+            self.net.shunt.q_mvar =  q_comp;
+            ##series compensation
+            k_x_comp_pu = self.K_x_comp_pu(lp_ref, 1, self.k_old);
+            self.k_old = k_x_comp_pu;
+            x_line_pu=self.X_pu(line_index)
+            self.net.impedance.loc[0, ['xft_pu', 'xtf_pu']] = x_line_pu * k_x_comp_pu
         networkFailure = False
 
         self.stateIndex += 1;
@@ -541,7 +548,10 @@ class powerGrid_ieee2:
             self.scaleLoadAndPowerValue(self.stateIndex, self.stateIndex - 1);
             try:
                 pp.runpp(self.net, run_control=True);
-                reward = self.calculateReward(self.net.res_bus.vm_pu, self.net.res_line.loading_percent);
+                if source == 'dqn':
+                    reward = self.calculateReward(self.net.res_bus.vm_pu, self.net.res_line.loading_percent,self.net.res_bus.va_degree[bus_index_shunt]);
+                else:
+                    reward = self.calculateReward(self.net.res_bus.vm_pu, self.net.res_line.loading_percent);
             except:
                 print('Unstable environment settings');
                 print(self.stateIndex);
@@ -551,7 +561,10 @@ class powerGrid_ieee2:
                 reward = -10000;
         else:
             print('wrong block!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
-        return (self.net.res_bus.vm_pu[bus_index_shunt],self.net.res_line.loading_percent[line_index]), reward, self.stateIndex == len(self.powerProfile)-1 or networkFailure;
+        s=(self.net.res_bus.vm_pu[bus_index_shunt],self.net.res_line.loading_percent[line_index])
+        if source=='dqn':
+            s=self.getCurrentStateForDQN()
+        return s, reward, self.stateIndex == len(self.powerProfile)-1 or networkFailure;
 
         """
         try:
@@ -601,7 +614,7 @@ class powerGrid_ieee2:
             raise Exception('cannot proceed at these settings. Please fix the environment settings');
 
     ## Calculate immediate reward
-    def calculateReward(self, voltages, loadingPercent):
+    def calculateReward(self, voltages, loadingPercent,loadAngle=10):
         try:
             rew=0;
             for i in range(1,2):
@@ -617,12 +630,15 @@ class powerGrid_ieee2:
                     rew+=20;
             rew = rew;
             loadingPercentInstability=np.std(loadingPercent) * len(loadingPercent);
+            rew = rew - loadingPercentInstability;
+            rew=rew if abs(loadAngle)<30 else rew-200;
+            #rew = rew if abs(loadAngle)<30 else (rew - 200)
         except:
             print('exception in calculate reward')
             print(voltages);
             print(loadingPercent)
             return 0;
-        return rew - loadingPercentInstability;
+        return rew
 
     ## Simple plot diagram
     def plotGridFlow(self):
