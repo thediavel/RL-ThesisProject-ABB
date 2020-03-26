@@ -14,7 +14,7 @@ pd.options.display.float_format = '{:.4g}'.format
 
 #### fix lineIndex in ieee-4
 class powerGrid_ieee4:
-    def __init__(self):
+    def __init__(self, numberOfTimeStepsPerState=4):
         print('in init. Here we lay down the grid structure and load some random state values based on IEEE dataset');
         with open('JanLoadEvery5mins.pkl', 'rb') as pickle_file:
             self.loadProfile = pickle.load(pickle_file)
@@ -70,9 +70,14 @@ class powerGrid_ieee4:
                                                  std_type=self.net.line.at[3, 'std_type'], to_bus=3,
                                                  type=self.net.line.at[3, 'type'],
                                                  x_ohm_per_km=self.net.line.at[3, 'x_ohm_per_km']);
+
+        # Change PV generator to static generator
         self.net.gen.drop(index=[0], inplace=True)  # Drop PV generator
         pp.create_sgen(self.net, 3, p_mw=318, q_mvar=181.4, name='static generator', scaling=1)
-        self.stateIndex = np.random.randint(len(self.loadProfile)-1, size=1)[0];
+
+        # Randomize starting index in load/gen profiles
+        self.numberOfTimeStepsPerState=numberOfTimeStepsPerState-1;
+        self.stateIndex = np.random.randint(len(self.loadProfile)-self.numberOfTimeStepsPerState, size=1)[0];
         #self.stateIndex=0
         self.scaleLoadAndPowerValue(self.stateIndex,-1);
         try:
@@ -91,13 +96,15 @@ class powerGrid_ieee4:
             print('Some error occurred while creating environment');
             raise Exception('cannot proceed at these settings. Please fix the environment settings');
 
-    ## UPDATE NEEDED:
     ## Retreieve voltage and line loading percent as measurements of current state
     def getCurrentState(self):
         bus_index_shunt = 1
         line_index = 1;
-
         return (self.net.res_bus.vm_pu[bus_index_shunt], self.net.res_line.loading_percent[line_index]);
+
+    ## Retrieve measurements for multiple buses, including load angle for DQN as well
+    def getCurrentStateForDQN(self):
+        return [self.net.res_bus.vm_pu[1:-3], self.net.res_line.loading_percent[0:], self.net.res_bus.va_degree[1:-3]];
 
     ## UPDATE NEEED:
     def takeAction(self, lp_ref, v_ref_pu):
@@ -108,12 +115,13 @@ class powerGrid_ieee4:
         shuntBackup = self.net.shunt.q_mvar
         self.net.switch.at[1, 'closed'] = False
         self.net.switch.at[0, 'closed'] = True
+
         ##shunt compenstation
         q_comp = self.Shunt_q_comp(v_ref_pu, bus_index_shunt, self.q_old);
         self.q_old = q_comp;
         self.net.shunt.q_mvar =  q_comp;
+
         ##series compensation
-        #i_ref = self.net.res_line.loading_percent[line_index];
         k_x_comp_pu = self.K_x_comp_pu(lp_ref, 1, self.k_old);
         self.k_old = k_x_comp_pu;
         x_line_pu = self.X_pu(line_index)
@@ -245,11 +253,12 @@ class powerGrid_ieee4:
             return 0;
         return rew
 
+    ## Simple plot of one-line diagram
     def plotGridFlow(self):
         print('plotting powerflow for the current state')
         plot.simple_plot(self.net)
 
-    ## UPDATE NEEDED:
+    ## Scale load and generation from load and generation profiles
     def scaleLoadAndPowerValue(self,index,refIndex):
         if refIndex != -1:
             scalingFactorLoad = self.loadProfile[index]/self.loadProfile[refIndex];
@@ -258,16 +267,17 @@ class powerGrid_ieee4:
             scalingFactorLoad = self.loadProfile[index] / (sum(self.loadProfile)/len(self.loadProfile));
             scalingFactorPower = self.powerProfile[index] / max(self.powerProfile);
 
-        self.net.load.p_mw[1] = self.net.load.p_mw[1] * scalingFactorLoad;
-        self.net.load.q_mvar[1] = self.net.load.q_mvar[1] * scalingFactorLoad;
+        # Scaling all loads and the static generator
+        self.net.load.p_mw = self.net.load.p_mw * scalingFactorLoad;
+        self.net.load.q_mvar = self.net.load.q_mvar * scalingFactorLoad;
         self.net.sgen.p_mw = self.net.sgen.p_mw * scalingFactorPower;
         self.net.sgen.q_mvar = self.net.sgen.q_mvar * scalingFactorPower;
 
     ## UPDATE NEEDED:
-    ##Function for transition from reference power to reactance of "TCSC"
+    ##Function for transition from reference power to reactance of series device
     def K_x_comp_pu(self, loading_perc_ref, line_index, k_old):
         ##NEW VERSION TEST:
-        c = 15  # Coefficient for transition tuned to hit equal load sharing at nominal IEEE
+        c = 15  # Coefficient for transition
         k_x_comp_max_ind = 0.4
         k_x_comp_max_cap = -k_x_comp_max_ind
         loading_perc_meas = self.net.res_line.loading_percent[line_index]
@@ -279,6 +289,7 @@ class powerGrid_ieee4:
         if abs(k_x_comp) < 0.0001:  # Helping with convergence
             self.net.switch.closed[1] = True  # ACTUAL network, not a copy
 
+        # Make sure output within rating of device
         if k_x_comp > k_x_comp_max_ind:
             k_x_comp = k_x_comp_max_ind
         if k_x_comp < k_x_comp_max_cap:
@@ -286,6 +297,7 @@ class powerGrid_ieee4:
         return k_x_comp
 
     ## UPDATE NEEDED:
+    ## Function for transition from reference parameter to reactive power output of shunt device
     def Shunt_q_comp(self, v_ref_pu, bus_index, q_old):
         v_bus_pu = self.net.res_bus.vm_pu[bus_index]
         k = 25  # Coefficient for transition, tuned to hit 1 pu with nominal IEEE
@@ -303,28 +315,6 @@ class powerGrid_ieee4:
             q_comp = q_min
 
         # print(q_comp)
-        return q_comp
-
-    def K_x_comp_pu_old(self, p_ref_pu,x_line_pu):
-        v_s_pu = self.net.res_bus.vm_pu[3]
-        v_r_pu = self.net.res_bus.vm_pu[2]
-        # 2 identical lines with length 0.5 km
-        delta_deg = self.net.res_bus.va_degree[3] - self.net.res_bus.va_degree[2]
-        k_x_comp = ((v_s_pu * v_r_pu * math.sin(math.radians(delta_deg))) / (p_ref_pu * x_line_pu)) - 1
-        return k_x_comp
-
-    ## Function for transition from reference parameter to reactive power output of shunt device
-    def Shunt_q_comp_old(self, v_ref_pu):
-        v_bus_pu = self.net.res_bus.vm_pu[1]
-        k = 25 #Coefficient for transition, tuned to hit 1 pu with nominal IEEE
-        q_rated = 100 #Mvar
-        q_min = -q_rated
-        q_max = q_rated
-        q_comp = k*q_rated*(v_bus_pu-v_ref_pu);
-        if q_comp > q_max:
-            q_comp = q_max
-        if q_comp < q_min:
-            q_comp = q_min
         return q_comp
 
 
@@ -544,7 +534,7 @@ class powerGrid_ieee2:
         networkFailure = False
 
         self.stateIndex += 1;
-        if self.stateIndex < len(self.powerProfile):
+        if self.stateIndex < min(len(self.powerProfile),len(self.loadProfile)):
             self.scaleLoadAndPowerValue(self.stateIndex, self.stateIndex - 1);
             try:
                 pp.runpp(self.net, run_control=True);
