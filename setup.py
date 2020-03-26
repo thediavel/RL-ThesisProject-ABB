@@ -452,7 +452,7 @@ class powerGrid_ieee2:
                                                  type=self.net.line.at[1, 'type'],
                                                  x_ohm_per_km=self.net.line.at[1, 'x_ohm_per_km'])
 
-        self.numberOfTimeStepsPerState=numberOfTimeStepsPerState-1;
+        self.numberOfTimeStepsPerState=numberOfTimeStepsPerState;
         ## select a random state for the episode
         self.stateIndex = np.random.randint(len(self.loadProfile)-self.numberOfTimeStepsPerState, size=1)[0];
         #self.stateIndex=100
