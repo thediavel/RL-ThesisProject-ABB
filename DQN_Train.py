@@ -6,6 +6,7 @@ from setup import powerGrid_ieee2
 import numpy as np
 import torch
 import os
+import matplotlib.pyplot as plt
 
 class DQN:
     def __init__(self, ieeeBusSystem, lr, memorySize, batchSize,  decayRate, numOfEpisodes, stepsPerEpisode, epsilon, annealingConstant, annealAfter):
@@ -160,14 +161,46 @@ class DQN:
                     'memory': self.memory,
                     'memory_counter': self.memory_counter
                 }, self.checkPoint)
-
-                #torch.save(self.eval_net, PATH)
-                #torch.save(self.target_net, PATH)
-                #pickledData = {'q_table': self.q_table, 'e': self.epsilon, 'allRewards': self.allRewards}
-                #pickle.dump(pickledData, open(self.checkPointName, "wb"))
-
         print('training finished')
 
+    def test(self, episodes, numOfStepsPerEpisode):
+        rewards=[]
+        count=0;
+        ul=self.numOfSteps;
+        self.eval_net.eval();
+        for j in range(0,episodes):
+            self.env_2bus.reset();
+            currentState = [];
+            for j in range(0, 3):
+                m = self.env_2bus.getCurrentStateForDQN();
+                currentState.extend(m);
+                self.env_2bus.stateIndex += 1;
+                self.env_2bus.scaleLoadAndPowerValue(self.env_2bus.stateIndex, self.env_2bus.stateIndex - 1)
+                self.env_2bus.runEnv(False);
+            currentState.extend(self.env_2bus.getCurrentStateForDQN())
+            rewardForEp=[];
+            for i in range(0,numOfStepsPerEpisode):
+                q_value = self.eval_net.forward(Variable(torch.unsqueeze(torch.FloatTensor(currentState), 0)).cuda());
+                # print(torch.max(q_value, 1)[1].shape)
+                actionIndex = torch.max(q_value, 1)[1].data.cpu().numpy()[0]  # return the argmax
+                action = self.getActionFromIndex(actionIndex);
+                # oldMeasurements = currentMeasurements;
+                currentMeasurements, reward, done = self.env_2bus.takeAction(action[0], action[1], 'dqn');
+                #oldState = currentState;
+                currentState.extend(currentMeasurements);
+                currentState.pop(0);
+                currentState.pop(1);
+                currentState.pop(2);
+                # if i == ul-1:
+                #     oldMeasurements = currentMeasurements;
+                #     ul+=self.numOfSteps;
+                rewardForEp.append(reward);
+                #print(self.env_2bus.net.res_bus.vm_pu)
+                #print(self.env_2bus.net.res_line)
+            rewards.append(sum(rewardForEp));
+            #print(sum(rewards))
+        plt.scatter(list(range(0, len(rewards))), rewards)
+        plt.show();
 
 
 
