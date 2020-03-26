@@ -44,12 +44,10 @@ class powerGrid_ieee4:
 
         # Breaker between grid HV bus and trafo HV bus to connect buses
         sw_SVC = pp.create_switch(self.net, bus=1, element=0, et='t', type='CB', closed=False)
-        # Shunt devices connected with MV bus
+        # Shunt device connected with MV bus
         shuntDev = pp.create_shunt(self.net, bus_SVC, 0, in_service=True, name='Shunt Device', step=1)
-        # TSC1 = pp.create_shunt(self.net, bus_SVC, -50, in_service=True, name='TSC1', step=1)
-        # TSC2 = pp.create_shunt(self.net, bus_SVC, -50, in_service=True, name='TSC2', step=1)
-        # TCR = pp.create_shunt(self.net, bus_SVC, 1, in_service=True, name='TCR', step=80)
-        ####Series device (at line 3, in middle between bus 2 and 3)
+
+        ##Series device (at line 3, in middle between bus 2 and 3)
         # Add intermediate buses for bypass and series compensation impedance
         bus_SC1 = pp.create_bus(self.net, name='SC bus 1', vn_kv=230, type='n', geodata=(-1, 3.1), zone=2,
                                 max_vm_pu=1.1, min_vm_pu=0.9)
@@ -84,6 +82,24 @@ class powerGrid_ieee4:
             print('Some error occured while creating environment');
             raise Exception('cannot proceed at these settings. Please fix the environment settings');
 
+    # Power flow calculation, runControl = True gives shunt device trafo tap changer iterative control activated
+    def runEnv(self, runControl):
+        try:
+            pp.runpp(self.net, run_control=runControl);
+            #print('Environment has been successfully initialized');
+        except:
+            print('Some error occurred while creating environment');
+            raise Exception('cannot proceed at these settings. Please fix the environment settings');
+
+    ## UPDATE NEEDED:
+    ## Retreieve voltage and line loading percent as measurements of current state
+    def getCurrentState(self):
+        bus_index_shunt = 1
+        line_index = 1;
+
+        return (self.net.res_bus.vm_pu[bus_index_shunt], self.net.res_line.loading_percent[line_index]);
+
+    ## UPDATE NEEED:
     def takeAction(self, lp_ref, v_ref_pu):
         #q_old = 0
         bus_index_shunt = 1
@@ -199,25 +215,41 @@ class powerGrid_ieee4:
             print('Some error occurred while resetting the environment');
             raise Exception('cannot proceed at these settings. Please fix the environment settings');
 
-    def calculateReward(self, voltages, loadingPercent):
-        rew = 0;
-        for i in range(0, len(voltages)):
-            if voltages[i] > 1.25 or voltages[i] < 0.8:
-                rew -= 50;
-            elif voltages[i] > 1.05 or voltages[i] < 0.95:
-                rew -= 15;
-            else:
-                rew += 20;
-        rew = rew / len(voltages)
-        loadingPercentInstability = np.std(loadingPercent) * len(loadingPercent);
-        # print(loadingPercent)
-        # print(loadingPercentInstability)
-        return rew - loadingPercentInstability;
+    # Calculate immediate reward with loadangle as optional
+    def calculateReward(self, voltages, loadingPercent, loadAngles=10):
+        try:
+            rew = 0;
+            for i in range(1, len(voltages)-2): # Dont need to include bus 0 as it is the slack with constant voltage and angle
+                                                # -2 because dont want to inclue buses created for FACTS device implementation (3 of them)
+                if voltages[i] > 1.25 or voltages[i] < 0.8:
+                    rew -= 50;
+                elif voltages[i] > 1.1 or voltages[i] < 0.9:
+                    rew -= 25;
+                elif voltages[i] > 1.05 or voltages[i] < 0.95:
+                    rew -= 10;
+                elif voltages[i] > 1.025 or voltages[i] < 0.975:
+                    rew += 10;
+                else:
+                    rew += 20;
+            rew = rew
+            loadingPercentInstability = np.std(loadingPercent) * len(loadingPercent);
+            rew -= loadingPercentInstability
+            # Check load angle
+            for i in range(1, len(loadAngles)-2):
+                if abs(loadAngles[i]) >= 30:
+                    rew -= 200
+        except:
+            print('exception in calculate reward')
+            print(voltages);
+            print(loadingPercent)
+            return 0;
+        return rew
 
     def plotGridFlow(self):
         print('plotting powerflow for the current state')
         plot.simple_plot(self.net)
 
+    ## UPDATE NEEDED:
     def scaleLoadAndPowerValue(self,index,refIndex):
         if refIndex != -1:
             scalingFactorLoad = self.loadProfile[index]/self.loadProfile[refIndex];
@@ -231,6 +263,7 @@ class powerGrid_ieee4:
         self.net.sgen.p_mw = self.net.sgen.p_mw * scalingFactorPower;
         self.net.sgen.q_mvar = self.net.sgen.q_mvar * scalingFactorPower;
 
+    ## UPDATE NEEDED:
     ##Function for transition from reference power to reactance of "TCSC"
     def K_x_comp_pu(self, loading_perc_ref, line_index, k_old):
         ##NEW VERSION TEST:
@@ -252,6 +285,7 @@ class powerGrid_ieee4:
             k_x_comp = k_x_comp_max_cap
         return k_x_comp
 
+    ## UPDATE NEEDED:
     def Shunt_q_comp(self, v_ref_pu, bus_index, q_old):
         v_bus_pu = self.net.res_bus.vm_pu[bus_index]
         k = 25  # Coefficient for transition, tuned to hit 1 pu with nominal IEEE
@@ -566,8 +600,7 @@ class powerGrid_ieee2:
     def reset(self):
         #print('reset the current environment for next episode');
         oldIndex = self.stateIndex;
-        self.stateIndex = np.random.randint(len(self.loadProfile) - self.numberOfTimeStepsPerState, size=1)[0];
-        #self.stateIndex=3729;
+        self.stateIndex = np.random.randint(len(self.loadProfile) - 1, size=1)[0];
         self.net.switch.at[0, 'closed'] = False
         self.net.switch.at[1, 'closed'] = True
         self.k_old = 0;
@@ -579,6 +612,7 @@ class powerGrid_ieee2:
         except:
             print('Some error occurred while resetting the environment');
             raise Exception('cannot proceed at these settings. Please fix the environment settings');
+
     ## Calculate immediate reward
     def calculateReward(self, voltages, loadingPercent,loadAngle=10):
         try:
@@ -604,7 +638,7 @@ class powerGrid_ieee2:
             print(voltages);
             print(loadingPercent)
             return 0;
-        return rew ;
+        return rew
 
     ## Simple plot diagram
     def plotGridFlow(self):
@@ -628,7 +662,6 @@ class powerGrid_ieee2:
 
     ## Transition from reference line loading to reactance of series comp
     def K_x_comp_pu(self, loading_perc_ref, line_index, k_old):
-        ##NEW VERSION TEST:
         c = 5  # Coefficient for transition tuned to hit equal load sharing at nominal IEEE
         #print((loading_perc_ref,line_index,k_old))
         k_x_comp_max_ind = 0.4
