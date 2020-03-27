@@ -590,7 +590,7 @@ class powerGrid_ieee2:
     def reset(self):
         #print('reset the current environment for next episode');
         oldIndex = self.stateIndex;
-        self.stateIndex = np.random.randint(len(self.loadProfile) - self.numberOfTimeStepsPerState, size = 1)[0];
+        self.stateIndex = np.random.randint(len(self.loadProfile) - self.numberOfTimeStepsPerState, size=1)[0];
         self.net.switch.at[0, 'closed'] = False
         self.net.switch.at[1, 'closed'] = True
         self.k_old = 0;
