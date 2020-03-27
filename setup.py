@@ -76,7 +76,7 @@ class powerGrid_ieee4:
         pp.create_sgen(self.net, 3, p_mw=318, q_mvar=181.4, name='static generator', scaling=1)
 
         # Randomize starting index in load/gen profiles
-        self.numberOfTimeStepsPerState=numberOfTimeStepsPerState-1;
+        self.numberOfTimeStepsPerState=numberOfTimeStepsPerState;
         self.stateIndex = np.random.randint(len(self.loadProfile)-self.numberOfTimeStepsPerState, size=1)[0];
         #self.stateIndex=0
         self.scaleLoadAndPowerValue(self.stateIndex,-1);
@@ -525,7 +525,7 @@ class powerGrid_ieee2:
             ##shunt compenstation
             q_comp = self.Shunt_q_comp(v_ref_pu, bus_index_shunt, self.q_old);
             self.q_old=q_comp;
-            self.net.shunt.q_mvar =  q_comp;
+            self.net.shunt.q_mvar = q_comp;
             ##series compensation
             k_x_comp_pu = self.K_x_comp_pu(lp_ref, 1, self.k_old);
             self.k_old = k_x_comp_pu;
@@ -590,7 +590,7 @@ class powerGrid_ieee2:
     def reset(self):
         #print('reset the current environment for next episode');
         oldIndex = self.stateIndex;
-        self.stateIndex = np.random.randint(len(self.loadProfile) - 1, size=1)[0];
+        self.stateIndex = np.random.randint(len(self.loadProfile) - self.numberOfTimeStepsPerState, size = 1)[0];
         self.net.switch.at[0, 'closed'] = False
         self.net.switch.at[1, 'closed'] = True
         self.k_old = 0;
@@ -648,7 +648,6 @@ class powerGrid_ieee2:
         self.net.load.q_mvar[0] = self.net.load.q_mvar[0] * scalingFactorLoad;
         #self.net.sgen.p_mw = self.net.sgen.p_mw * scalingFactorPower;
         #self.net.sgen.q_mvar = self.net.sgen.q_mvar * scalingFactorPower;
-
 
     ## Transition from reference line loading to reactance of series comp
     def K_x_comp_pu(self, loading_perc_ref, line_index, k_old):
