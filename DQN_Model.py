@@ -24,7 +24,7 @@ class ieee4_net(nn.Module):
         return self.fc5(x)
 
 class ieee2_net(nn.Module):
-    def __init__(self, inputs, num_actions,p=0.3):
+    def __init__(self, inputs, num_actions,p=0.5):
         super(ieee2_net, self).__init__()
         self.fc1 = nn.Linear(inputs, 24);
         self.fc2 = nn.Linear(24, 36);

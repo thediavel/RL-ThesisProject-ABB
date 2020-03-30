@@ -74,7 +74,7 @@ class powerGrid_ieee4:
         pp.create_sgen(self.net, 3, p_mw=318, q_mvar=181.4, name='static generator', scaling=1)
         self.stateIndex = np.random.randint(len(self.loadProfile)-1, size=1)[0];
         #self.stateIndex=0
-        self.scaleLoadAndPowerValue(self.stateIndex,-1);
+        self.scaleLoadAndPowerValue(self.stateIndex);
         try:
             pp.runpp(self.net, run_control=False)
             print('Environment has been successfully initialized');
@@ -122,7 +122,7 @@ class powerGrid_ieee4:
 
         self.stateIndex += 1;
         if self.stateIndex < len(self.powerProfile):
-            self.scaleLoadAndPowerValue(self.stateIndex, self.stateIndex - 1);
+            self.scaleLoadAndPowerValue(self.stateIndex);
             try:
                 pp.runpp(self.net, run_control=True);
                 reward = self.calculateReward(self.net.res_bus.vm_pu, self.net.res_line.loading_percent);
@@ -193,7 +193,7 @@ class powerGrid_ieee4:
 
         self.stateIndex+=1;
         if self.stateIndex < len(self.powerProfile):
-            if(self.scaleLoadAndPowerValue(self.stateIndex,self.stateIndex-1) == False):
+            if(self.scaleLoadAndPowerValue(self.stateIndex) == False):
                 networkFailure=True;
                 reward=1000;
                 #self.stateIndex -= 1;
@@ -207,7 +207,7 @@ class powerGrid_ieee4:
         self.net.switch.at[1, 'closed'] = True
         self.k_old = 0;
         self.q_old = 0;
-        self.scaleLoadAndPowerValue(self.stateIndex,oldIndex);
+        self.scaleLoadAndPowerValue(self.stateIndex);
         try:
             pp.runpp(self.net, run_control=False);
             print('Environment has been successfully initialized');
@@ -250,13 +250,9 @@ class powerGrid_ieee4:
         plot.simple_plot(self.net)
 
     ## UPDATE NEEDED:
-    def scaleLoadAndPowerValue(self,index,refIndex):
-        if refIndex != -1:
-            scalingFactorLoad = self.loadProfile[index]/self.loadProfile[refIndex];
-            scalingFactorPower = self.powerProfile[index] / self.powerProfile[refIndex];
-        else:
-            scalingFactorLoad = self.loadProfile[index] / (sum(self.loadProfile)/len(self.loadProfile));
-            scalingFactorPower = self.powerProfile[index] / max(self.powerProfile);
+    def scaleLoadAndPowerValue(self,index):
+        scalingFactorLoad = self.loadProfile[index] / (sum(self.loadProfile)/len(self.loadProfile));
+        scalingFactorPower = self.powerProfile[index] / max(self.powerProfile);
 
         self.net.load.p_mw[1] = self.net.load.p_mw[1] * scalingFactorLoad;
         self.net.load.q_mvar[1] = self.net.load.q_mvar[1] * scalingFactorLoad;
@@ -486,11 +482,14 @@ class powerGrid_ieee2:
                                                  type=self.net.line.at[1, 'type'],
                                                  x_ohm_per_km=self.net.line.at[1, 'x_ohm_per_km'])
 
+        self.nominalP=self.net.load.p_mw[0];
+        self.nominalQ=self.net.load.q_mvar[0]
+
         self.numberOfTimeStepsPerState=numberOfTimeStepsPerState;
         ## select a random state for the episode
-        self.stateIndex = np.random.randint(len(self.loadProfile)-self.numberOfTimeStepsPerState, size=1)[0];
+        self.stateIndex = np.random.randint(len(self.loadProfile)-1-self.numberOfTimeStepsPerState, size=1)[0];
         #self.stateIndex=100
-        self.scaleLoadAndPowerValue(self.stateIndex,-1);
+        self.scaleLoadAndPowerValue(self.stateIndex);
         #pp.runpp(self.net, run_control=False);
         #print(self.net.res_bus.vm_pu);
         try:
@@ -545,18 +544,24 @@ class powerGrid_ieee2:
 
         self.stateIndex += 1;
         if self.stateIndex < len(self.powerProfile):
-            self.scaleLoadAndPowerValue(self.stateIndex, self.stateIndex - 1);
+            #self.scaleLoadAndPowerValue(self.stateIndex, self.stateIndex - 1);
+            self.scaleLoadAndPowerValue(self.stateIndex);
             try:
+                dummyRes=(self.net.res_bus.vm_pu,self.net.res_line.loading_percent)
                 pp.runpp(self.net, run_control=True);
                 if source == 'dqn':
                     reward = self.calculateReward(self.net.res_bus.vm_pu, self.net.res_line.loading_percent,self.net.res_bus.va_degree[bus_index_shunt]);
                 else:
                     reward = self.calculateReward(self.net.res_bus.vm_pu, self.net.res_line.loading_percent);
+                print(reward,self.getCurrentStateForDQN(),np.std(self.net.res_line.loading_percent))
             except:
                 print('Unstable environment settings');
-                print(self.stateIndex);
-                print(self.net.load.p_mw[0]);
-                print(self.net.load.q_mvar[0]);
+                print(lp_ref,v_ref_pu)
+                print(dummyRes)
+                #print(self.net.res_line.loading_percent)
+                #print(self.stateIndex);
+                print(self.net.load.p_mw[0],self.net.load.q_mvar[0]);
+                #print();
                 networkFailure = True;
                 reward = -10000;
         else:
@@ -605,7 +610,8 @@ class powerGrid_ieee2:
         self.net.switch.at[1, 'closed'] = True
         self.k_old = 0;
         self.q_old = 0;
-        self.scaleLoadAndPowerValue(self.stateIndex,oldIndex);
+        #self.scaleLoadAndPowerValue(self.stateIndex,oldIndex);
+        self.scaleLoadAndPowerValue(self.stateIndex);
         try:
             pp.runpp(self.net, run_control=False);
             #print('Environment has been successfully initialized');
@@ -646,16 +652,13 @@ class powerGrid_ieee2:
         plot.simple_plot(self.net)
 
     ## Scale load and generation from load and generation profiles
-    def scaleLoadAndPowerValue(self,index,refIndex):
-        if refIndex != -1: # If not first index of load/generation profile
-            scalingFactorLoad = 0 if self.loadProfile[refIndex] == 0 else self.loadProfile[index]/self.loadProfile[refIndex];
-            scalingFactorPower = 0 if self.powerProfile[refIndex]==0 else self.powerProfile[index] / self.powerProfile[refIndex];
-        else:
-            scalingFactorLoad = self.loadProfile[index] / (sum(self.loadProfile)/len(self.loadProfile));
-            scalingFactorPower = self.powerProfile[index] / max(self.powerProfile);
+    def scaleLoadAndPowerValue(self,index):
 
-        self.net.load.p_mw[0] = self.net.load.p_mw[0] * scalingFactorLoad;
-        self.net.load.q_mvar[0] = self.net.load.q_mvar[0] * scalingFactorLoad;
+        scalingFactorLoad = self.loadProfile[index] / (sum(self.loadProfile)/len(self.loadProfile));
+        scalingFactorPower = self.powerProfile[index] / max(self.powerProfile);
+
+        self.net.load.p_mw[0] = self.nominalP * scalingFactorLoad;
+        self.net.load.q_mvar[0] = self.nominalQ * scalingFactorLoad;
         #self.net.sgen.p_mw = self.net.sgen.p_mw * scalingFactorPower;
         #self.net.sgen.q_mvar = self.net.sgen.q_mvar * scalingFactorPower;
 

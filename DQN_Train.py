@@ -116,7 +116,7 @@ class DQN:
                 m=self.env_2bus.getCurrentStateForDQN();
                 currentState.extend(m);
                 self.env_2bus.stateIndex+=1;
-                self.env_2bus.scaleLoadAndPowerValue(self.env_2bus.stateIndex,self.env_2bus.stateIndex-1)
+                self.env_2bus.scaleLoadAndPowerValue(self.env_2bus.stateIndex)
                 self.env_2bus.runEnv(False);
             currentState.extend(self.env_2bus.getCurrentStateForDQN())
             #print(len(currentState));
@@ -178,7 +178,7 @@ class DQN:
                 m = self.env_2bus.getCurrentStateForDQN();
                 currentState.extend(m);
                 self.env_2bus.stateIndex += 1;
-                self.env_2bus.scaleLoadAndPowerValue(self.env_2bus.stateIndex, self.env_2bus.stateIndex - 1)
+                self.env_2bus.scaleLoadAndPowerValue(self.env_2bus.stateIndex)
                 self.env_2bus.runEnv(False);
             currentState.extend(self.env_2bus.getCurrentStateForDQN())
             rewardForEp=[];
@@ -198,6 +198,8 @@ class DQN:
                 #     oldMeasurements = currentMeasurements;
                 #     ul+=self.numOfSteps;
                 rewardForEp.append(reward);
+                if done == True:
+                    break;
                 #print(self.env_2bus.net.res_bus.vm_pu)
                 #print(self.env_2bus.net.res_line)
             rewards.append(sum(rewardForEp));
@@ -257,7 +259,7 @@ class DQN:
         self.env_2bus.reset()
         stateIndex = self.env_2bus.stateIndex
         loadProfile = self.env_2bus.loadProfile
-        while stateIndex + steps > len(loadProfile):
+        while stateIndex + steps+4 > len(loadProfile):
             self.env_2bus.reset()  # Reset to get sufficient number of steps left in time series
             stateIndex = self.env_2bus.stateIndex
             loadProfile = self.env_2bus.loadProfile
@@ -267,7 +269,8 @@ class DQN:
             m = self.env_2bus.getCurrentStateForDQN();
             currentState.extend(m);
             self.env_2bus.stateIndex += 1;
-            self.env_2bus.scaleLoadAndPowerValue(self.env_2bus.stateIndex, self.env_2bus.stateIndex - 1)
+            #self.env_2bus.scaleLoadAndPowerValue(self.env_2bus.stateIndex, self.env_2bus.stateIndex - 1)
+            self.env_2bus.scaleLoadAndPowerValue(self.env_2bus.stateIndex);
             self.env_2bus.runEnv(False);
         currentState.extend(self.env_2bus.getCurrentStateForDQN())
 
@@ -321,10 +324,10 @@ class DQN:
 
             # Increment state
             stateIndex += 1
-            qObj_env_noFACTS.env_2bus.scaleLoadAndPowerValue(stateIndex, stateIndex - 1)
-            qObj_env_FACTS.env_2bus.scaleLoadAndPowerValue(stateIndex, stateIndex - 1)
-            qObj_env_RLFACTS.env_2bus.scaleLoadAndPowerValue(stateIndex, stateIndex - 1)
-            qObj_env_FACTS_noSeries.env_2bus.scaleLoadAndPowerValue(stateIndex, stateIndex - 1)
+            qObj_env_noFACTS.env_2bus.scaleLoadAndPowerValue(stateIndex)
+            qObj_env_FACTS.env_2bus.scaleLoadAndPowerValue(stateIndex)
+            qObj_env_RLFACTS.env_2bus.scaleLoadAndPowerValue(stateIndex)
+            qObj_env_FACTS_noSeries.env_2bus.scaleLoadAndPowerValue(stateIndex)
             #print(i)
 
         # Adjust arrays so indices are overlapping correctly. otherwise the RL will have i+1:th state where rest has i:th state
@@ -405,15 +408,13 @@ class DQN:
         plt.legend(['v no facts', 'v facts', 'v facts no series comp','v RL facts'], loc=2)
         plt.show()
 
-
-
-
 #print(USE_CUDA)
-#dqn=DQN(2, 0.001, 2000, 64, 0.7, 25000, 24, 1, 0.98, 200,200)
+#dqn1=DQN(2, 0.001, 2000, 64, 0.7, 25000, 24, 1, 0.98, 200,200)
+dqn3=DQN(2, 0.001, 2000, 128, 0.7, 50000, 24, 1, 0.99, 200,1000)
 
-dqn=DQN(2, 0.001, 2000, 32, 0.7, 50000, 24, 1, 0.99, 200,1000)
-dqn.train()
-#dqn.comparePerformance(steps=500, oper_upd_interval=6, bus_index_shunt=1, bus_index_voltage=1, line_index=1)
-
+#dqn2=DQN(2, 0.001, 2000, 32, 0.7, 50000, 24, 1, 0.99, 200,1000)
+dqn3.train()
+#dqn2.comparePerformance(steps=1000, oper_upd_interval=6, bus_index_shunt=1, bus_index_voltage=1, line_index=1)
+#dqn.test(300,24)
 #for i in range(0,3):
 #    print(i)

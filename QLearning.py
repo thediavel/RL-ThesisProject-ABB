@@ -191,7 +191,7 @@ class qLearning:
                 i.env_2bus.net.switch.at[1, 'closed'] = True
                 i.env_2bus.k_old = 0;
                 i.env_2bus.q_old = 0;
-                i.env_2bus.scaleLoadAndPowerValue(self.env_2bus.stateIndex, oldIndex);
+                i.env_2bus.scaleLoadAndPowerValue(self.env_2bus.stateIndex);
                 i.env_2bus.runEnv(False);
                 if len(rewards) < len(models)+1:
                     rewards.append([]);
@@ -391,10 +391,10 @@ class qLearning:
 
             # Increment state
             stateIndex += 1
-            qObj_env_noFACTS.env_2bus.scaleLoadAndPowerValue(stateIndex, stateIndex - 1)
-            qObj_env_FACTS.env_2bus.scaleLoadAndPowerValue(stateIndex, stateIndex - 1)
-            qObj_env_RLFACTS.env_2bus.scaleLoadAndPowerValue(stateIndex, stateIndex - 1)
-            qObj_env_FACTS_noSeries.env_2bus.scaleLoadAndPowerValue(stateIndex, stateIndex - 1)
+            qObj_env_noFACTS.env_2bus.scaleLoadAndPowerValue(stateIndex)
+            qObj_env_FACTS.env_2bus.scaleLoadAndPowerValue(stateIndex)
+            qObj_env_RLFACTS.env_2bus.scaleLoadAndPowerValue(stateIndex)
+            qObj_env_FACTS_noSeries.env_2bus.scaleLoadAndPowerValue(stateIndex)
             #print(i)
 
         # Adjust arrays so indices are overlapping correctly. otherwise the RL will have i+1:th state where rest has i:th state
