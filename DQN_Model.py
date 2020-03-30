@@ -8,7 +8,6 @@ import torch.nn.functional as F
 
 class ieee4_net(nn.Module):
     def __init__(self, in_channels=4, num_actions=200):
-
         super(ieee4_net, self).__init__()
         self.conv1 = nn.Conv2d(in_channels, 8, kernel_size=3, stride=1,padding =1)
         self.conv2 = nn.Conv2d(8, 16, kernel_size=4, stride=2)
