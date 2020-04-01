@@ -16,9 +16,9 @@ pd.options.display.float_format = '{:.4g}'.format
 class powerGrid_ieee4:
     def __init__(self, numberOfTimeStepsPerState=4):
         print('in init. Here we lay down the grid structure and load some random state values based on IEEE dataset');
-        with open('JanLoadEvery5mins.pkl', 'rb') as pickle_file:
+        with open('Data/JanLoadEvery5mins.pkl', 'rb') as pickle_file:
             self.loadProfile = pickle.load(pickle_file)
-        with open('generatorValuesEvery5mins.pkl', 'rb') as pickle_file:
+        with open('Data/generatorValuesEvery5mins.pkl', 'rb') as pickle_file:
             self.powerProfile = pickle.load(pickle_file)
 
         self.k_old=0;
@@ -318,14 +318,14 @@ class powerGrid_ieee4:
 class powerGrid_ieee2:
     def __init__(self,numberOfTimeStepsPerState=4):
         #print('in init. Here we lay down the grid structure and load some random state values based on IEEE dataset');
-        with open('JanLoadEvery5mins.pkl', 'rb') as pickle_file:
+        with open('Data/JanLoadEvery5mins.pkl', 'rb') as pickle_file:
             self.loadProfile = pickle.load(pickle_file)
-        with open('generatorValuesEvery5mins.pkl', 'rb') as pickle_file:
+        with open('Data/generatorValuesEvery5mins.pkl', 'rb') as pickle_file:
             self.powerProfile = pickle.load(pickle_file)
 
-        with open('trainIndices.pkl', 'rb') as pickle_file:
+        with open('Data/trainIndices.pkl', 'rb') as pickle_file:
             self.trainIndices = pickle.load(pickle_file)
-        with open('testIndices.pkl', 'rb') as pickle_file:
+        with open('Data/testIndices.pkl', 'rb') as pickle_file:
             self.testIndices = pickle.load(pickle_file)
 
 
@@ -729,7 +729,7 @@ def createLoadProfile():
             JanLoadEvery5mins.append(l);
             l=0;
 
-    windDataDF = pd.read_excel('WindEnergyData.xlsx');
+    windDataDF = pd.read_excel('Data/WindEnergyData.xlsx');
     generatorValuesEvery5mins=[];
     for i in range(1,windDataDF.shape[0]):
         randomValue=np.random.choice(100, 1)[0]
@@ -743,20 +743,20 @@ def createLoadProfile():
         generatorValuesEvery5mins.append(windDataDF.iloc[i]['DE_50hertz_wind_generation_actual'])
     print(len(generatorValuesEvery5mins))
     print(len(JanLoadEvery5mins))
-    pickle.dump(generatorValuesEvery5mins, open("generatorValuesEvery5mins.pkl", "wb"))
-    pickle.dump(JanLoadEvery5mins, open("JanLoadEvery5mins.pkl", "wb"))
+    pickle.dump(generatorValuesEvery5mins, open("Data/generatorValuesEvery5mins.pkl", "wb"))
+    pickle.dump(JanLoadEvery5mins, open("Data/JanLoadEvery5mins.pkl", "wb"))
 
 
 
 def trainTestSplit():
-    with open('JanLoadEvery5mins.pkl', 'rb') as pickle_file:
+    with open('Data/JanLoadEvery5mins.pkl', 'rb') as pickle_file:
         loadProfile = pickle.load(pickle_file)
     numOFTrainingIndices =  int(np.round(0.8*len(loadProfile)))
     trainIndices=np.random.choice(range(0,len(loadProfile)),numOFTrainingIndices,replace=False)
     trainIndicesSet=set(trainIndices)
     testIndices=[x for x in range(0,len(loadProfile)) if x not in trainIndicesSet]
-    pickle.dump(trainIndices, open("trainIndices.pkl", "wb"))
-    pickle.dump(testIndices, open("testIndices.pkl", "wb"))
+    pickle.dump(trainIndices, open("Data/trainIndices.pkl", "wb"))
+    pickle.dump(testIndices, open("Data/testIndices.pkl", "wb"))
     #print(len(loadProfile))
     #print(len(trainIndicesSet))
     #print(len(trainIndices))
