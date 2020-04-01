@@ -107,16 +107,16 @@ class DQN:
         print('Has already been  trained for following num of episodes: ' + str(len(self.allRewards)))
         noe = self.numOfEpisodes - len(self.allRewards)
         self.eval_net.train();
+        self.env_2bus.setMode('train')
         for i in range(0, noe):
             accumulatedReward = 0;
             self.env_2bus.reset();
             currentState=[];
-
             for j in range(0,3):
                 m=self.env_2bus.getCurrentStateForDQN();
                 currentState.extend(m);
                 self.env_2bus.stateIndex+=1;
-                self.env_2bus.scaleLoadAndPowerValue(self.env_2bus.stateIndex,self.env_2bus.stateIndex-1)
+                self.env_2bus.scaleLoadAndPowerValue(self.env_2bus.stateIndex)
                 self.env_2bus.runEnv(False);
             currentState.extend(self.env_2bus.getCurrentStateForDQN())
             #print(len(currentState));
@@ -171,6 +171,7 @@ class DQN:
         count=0;
         ul=self.numOfSteps;
         self.eval_net.eval();
+        self.env_2bus.setMode('test')
         for j in range(0,episodes):
             self.env_2bus.reset();
             currentState = [];
@@ -276,7 +277,7 @@ class DQN:
         v_RLFACTS_allAct = []
         lp_max_RLFACTS_allAct = []
         lp_std_RLFACTS_allAct = []
-
+        self.env_2bus.setMode('test')
         self.env_2bus.reset()
         stateIndex = self.env_2bus.stateIndex
         loadProfile = self.env_2bus.loadProfile
@@ -349,7 +350,6 @@ class DQN:
             v_RLFACTS_allAct.append(voltage)
             lp_max_RLFACTS_allAct.append(lp_max)
             lp_std_RLFACTS_allAct.append(lp_std)
-
 
             # Increment state
             stateIndex += 1
@@ -451,13 +451,14 @@ class DQN:
         plt.legend(['v no FACTS', 'v FACTS', 'v FACTS no series comp','v RL FACTS', 'v RL FACTS all act.'], loc=2)
         plt.show()
 
-#print(USE_CUDA)
 #dqn1=DQN(2, 0.001, 2000, 64, 0.7, 25000, 24, 1, 0.98, 200,200)
-dqn3=DQN(2, 0.001, 2000, 128, 0.7, 50000, 24, 1, 0.99, 200,1000)
-
+#dqn3=DQN(2, 0.001, 2000, 128, 0.7, 50000, 24, 1, 0.99, 200,1000)
 #dqn2=DQN(2, 0.001, 2000, 32, 0.7, 50000, 24, 1, 0.99, 200,1000)
-dqn3.train()
-#dqn2.comparePerformance(steps=1000, oper_upd_interval=6, bus_index_shunt=1, bus_index_voltage=1, line_index=1)
-#dqn.test(300,24)
+
+dqn4=DQN(2, 0.001, 2000, 32, 0.6, 50000, 24, 1, 0.99, 200, 1000)
+dqn4.train()
+
+#dqn3.comparePerformance(steps=300, oper_upd_interval=6, bus_index_shunt=1, bus_index_voltage=1, line_index=1)
+#dqn3.test(100,24)
 #for i in range(0,3):
 #    print(i)
