@@ -16,9 +16,9 @@ pd.options.display.float_format = '{:.4g}'.format
 class powerGrid_ieee4:
     def __init__(self, numberOfTimeStepsPerState=4):
         print('in init. Here we lay down the grid structure and load some random state values based on IEEE dataset');
-        with open('JanLoadEvery5mins.pkl', 'rb') as pickle_file:
+        with open('Data/JanLoadEvery5mins.pkl', 'rb') as pickle_file:
             self.loadProfile = pickle.load(pickle_file)
-        with open('generatorValuesEvery5mins.pkl', 'rb') as pickle_file:
+        with open('Data/generatorValuesEvery5mins.pkl', 'rb') as pickle_file:
             self.powerProfile = pickle.load(pickle_file)
 
         self.k_old=0;
@@ -318,10 +318,16 @@ class powerGrid_ieee4:
 class powerGrid_ieee2:
     def __init__(self,numberOfTimeStepsPerState=4):
         #print('in init. Here we lay down the grid structure and load some random state values based on IEEE dataset');
-        with open('JanLoadEvery5mins.pkl', 'rb') as pickle_file:
+        with open('Data/JanLoadEvery5mins.pkl', 'rb') as pickle_file:
             self.loadProfile = pickle.load(pickle_file)
-        with open('generatorValuesEvery5mins.pkl', 'rb') as pickle_file:
+        with open('Data/generatorValuesEvery5mins.pkl', 'rb') as pickle_file:
             self.powerProfile = pickle.load(pickle_file)
+
+        with open('Data/trainIndices.pkl', 'rb') as pickle_file:
+            self.trainIndices = pickle.load(pickle_file)
+        with open('Data/testIndices.pkl', 'rb') as pickle_file:
+            self.testIndices = pickle.load(pickle_file)
+
 
         self.actionSpace = {'v_ref_pu': [i*5 / 100 for i in range(16, 25)], 'lp_ref': [i * 15 for i in range(0, 11)]}
         self.k_old = 0;
@@ -478,17 +484,28 @@ class powerGrid_ieee2:
 
         self.numberOfTimeStepsPerState=numberOfTimeStepsPerState;
         ## select a random state for the episode
-        self.stateIndex = np.random.randint(len(self.loadProfile)-1-self.numberOfTimeStepsPerState, size=1)[0];
-        #self.stateIndex=100
+        #self.stateIndex = np.random.randint(len(self.loadProfile)-1-self.numberOfTimeStepsPerState, size=1)[0];
+
+    def setMode(self,mode):
+        if mode=='train':
+            self.source=self.trainIndices;
+        else:
+            self.source=self.testIndices;
+        self.stateIndex = self.getstartingIndex()
         self.scaleLoadAndPowerValue(self.stateIndex);
-        #pp.runpp(self.net, run_control=False);
-        #print(self.net.res_bus.vm_pu);
         try:
             pp.runpp(self.net, run_control=False);
             print('Environment has been successfully initialized');
         except:
             print('Some error occurred while creating environment');
             raise Exception('cannot proceed at these settings. Please fix the environment settings');
+
+    def getstartingIndex(self):
+        index = np.random.randint(len(self.source), size = 1)[0];
+        if self.source[index]+self.numberOfTimeStepsPerState < len(self.loadProfile):
+            return self.source[index];
+        else:
+            return self.getstartingIndex()
 
     # Power flow calculation, runControl = True gives shunt device trafo tap changer iterative control activated
     def runEnv(self, runControl):
@@ -547,10 +564,7 @@ class powerGrid_ieee2:
                 print('Unstable environment settings');
                 print(lp_ref,v_ref_pu)
                 print(dummyRes)
-                #print(self.net.res_line.loading_percent)
-                #print(self.stateIndex);
                 print(self.net.load.p_mw[0],self.net.load.q_mvar[0]);
-                #print();
                 networkFailure = True;
                 reward = -10000;
         else:
@@ -592,18 +606,14 @@ class powerGrid_ieee2:
 
     ## Resets environment choosing new starting state, used for beginning of each episode
     def reset(self):
-        #print('reset the current environment for next episode');
-        oldIndex = self.stateIndex;
-        self.stateIndex = np.random.randint(len(self.loadProfile) - self.numberOfTimeStepsPerState, size=1)[0];
+        self.stateIndex = self.getstartingIndex()
         self.net.switch.at[0, 'closed'] = False
         self.net.switch.at[1, 'closed'] = True
         self.k_old = 0;
         self.q_old = 0;
-        #self.scaleLoadAndPowerValue(self.stateIndex,oldIndex);
         self.scaleLoadAndPowerValue(self.stateIndex);
         try:
             pp.runpp(self.net, run_control=False);
-            #print('Environment has been successfully initialized');
         except:
             print('Some error occurred while resetting the environment');
             raise Exception('cannot proceed at these settings. Please fix the environment settings');
@@ -719,7 +729,7 @@ def createLoadProfile():
             JanLoadEvery5mins.append(l);
             l=0;
 
-    windDataDF = pd.read_excel('WindEnergyData.xlsx');
+    windDataDF = pd.read_excel('Data/WindEnergyData.xlsx');
     generatorValuesEvery5mins=[];
     for i in range(1,windDataDF.shape[0]):
         randomValue=np.random.choice(100, 1)[0]
@@ -733,8 +743,24 @@ def createLoadProfile():
         generatorValuesEvery5mins.append(windDataDF.iloc[i]['DE_50hertz_wind_generation_actual'])
     print(len(generatorValuesEvery5mins))
     print(len(JanLoadEvery5mins))
-    pickle.dump(generatorValuesEvery5mins, open("generatorValuesEvery5mins.pkl", "wb"))
-    pickle.dump(JanLoadEvery5mins, open("JanLoadEvery5mins.pkl", "wb"))
+    pickle.dump(generatorValuesEvery5mins, open("Data/generatorValuesEvery5mins.pkl", "wb"))
+    pickle.dump(JanLoadEvery5mins, open("Data/JanLoadEvery5mins.pkl", "wb"))
+
+
+
+def trainTestSplit():
+    with open('Data/JanLoadEvery5mins.pkl', 'rb') as pickle_file:
+        loadProfile = pickle.load(pickle_file)
+    numOFTrainingIndices =  int(np.round(0.8*len(loadProfile)))
+    trainIndices=np.random.choice(range(0,len(loadProfile)),numOFTrainingIndices,replace=False)
+    trainIndicesSet=set(trainIndices)
+    testIndices=[x for x in range(0,len(loadProfile)) if x not in trainIndicesSet]
+    pickle.dump(trainIndices, open("Data/trainIndices.pkl", "wb"))
+    pickle.dump(testIndices, open("Data/testIndices.pkl", "wb"))
+    #print(len(loadProfile))
+    #print(len(trainIndicesSet))
+    #print(len(trainIndices))
+    #print(len(testIndices))
 
 #createLoadProfile()
-
+#trainTestSplit()
