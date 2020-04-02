@@ -189,7 +189,7 @@ class DQN:
         print('training finished')
 
     def test(self, episodes, numOfStepsPerEpisode, busVoltageIndex):
-        copyNetwork = copy.deepcopy(self.env_2bus)
+        copyNetwork = copy.deepcopy(self)
         rewards=[]
         regrets=[]
         count=0;
@@ -507,11 +507,11 @@ class DQN:
 #dqn2=DQN(2, 0.001, 2000, 32, 0.7, 50000, 24, 1, 0.99, 200,1000)
 
 #dqn4=DQN(2, 0.001, 2000, 32, 0.6, 50000, 24, 1, 0.99, 200, 1000)
-dqn5=DQN(2, 0.001, 2000, 64, 0.6, 50000, 24, 1, 0.99, 200, 1000)
+#dqn5=DQN(2, 0.001, 2000, 64, 0.6, 50000, 24, 1, 0.99, 200, 1000)
 #dqn5.train()
 
 #dqn5.comparePerformance(steps=300, oper_upd_interval=6, bus_index_shunt=1, bus_index_voltage=1, line_index=1)
 #dqn4.test(10,24)
 #for i in range(0,3):
 #    print(i)
-dqn5.test(10,24,1)
+#dqn5.test(10,24,1)
