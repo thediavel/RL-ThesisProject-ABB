@@ -189,13 +189,13 @@ class DQN:
         print('training finished')
 
     def test(self, episodes, numOfStepsPerEpisode, busVoltageIndex):
-        copyNetwork = copy.deepcopy(self)
         rewards=[]
         regrets=[]
         count=0;
         ul=self.numOfSteps;
         self.eval_net.eval();
         self.env_2bus.setMode('test')
+        copyNetwork = copy.deepcopy(self)
         #self.writer = SummaryWriter(
         #    'runs/dqn_lr' + str(self.learningRate) + 'tua' + str(self.target_update_iter) + 'bs' + str(
         #        self.batch_size) + 'ms' + str(
@@ -251,8 +251,8 @@ class DQN:
         plt.show()
         #print(sum(rewards))
         #self.writer.add_graph(self.eval_net, Variable(torch.unsqueeze(torch.FloatTensor(currentState), 0)).cuda())
-        plt.scatter(list(range(0, len(rewards))), rewards)
-        plt.show();
+        #plt.scatter(list(range(0, len(rewards))), rewards)
+        #plt.show();
 
     def lp_ref(self):
         return stat.mean(self.env_2bus.net.res_line.loading_percent)
