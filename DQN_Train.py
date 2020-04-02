@@ -189,6 +189,7 @@ class DQN:
         print('training finished')
 
     def test(self, episodes, numOfStepsPerEpisode, busVoltageIndex):
+        copyNetwork = copy.deepcopy(self.env_2bus)
         rewards=[]
         regrets=[]
         count=0;
@@ -230,7 +231,7 @@ class DQN:
                 #     oldMeasurements = currentMeasurements;
                 #     ul+=self.numOfSteps;
                 rewardForEp.append(reward);
-                _,_,_,_, rew_aa = self.runFACTSallActionsRL(busVoltageIndex)
+                _,_,_,_, rew_aa = copyNetwork.runFACTSallActionsRL(busVoltageIndex)
                 rew_aa_ForEp.append(rew_aa)
                 if done == True:
                     break;
@@ -290,12 +291,16 @@ class DQN:
     ## Run environment and try all actions an choose highest reward
     def runFACTSallActionsRL(self, busVoltageIndex):
         copyNetwork = copy.deepcopy(self.env_2bus)
+        #copyNetwork.stateIndex += 1
         reward = -100000
         bestAction = []
         # Test all actions
         for i in range(0, len(self.actions)):
             action = self.getActionFromIndex(i)
             nextStateMeas, rew, done = copyNetwork.takeAction(action[0], action[1], 'dqn')
+            copyNetwork.stateIndex -= 1
+            #copyNetwork.scaleLoadAndPowerValue(copyNetwork.stateIndex);
+            #copyNetwork.runEnv()
             bestAction = action if rew > reward else bestAction  # Save best action
         # Take best action in actual environment
         nextStateMeasurements, reward, done = self.env_2bus.takeAction(bestAction[0], bestAction[1],'dqn')
