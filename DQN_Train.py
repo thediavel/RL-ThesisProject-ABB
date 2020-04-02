@@ -189,7 +189,7 @@ class DQN:
         print('training finished')
 
     def test(self, episodes, numOfStepsPerEpisode, busVoltageIndex):
-        copyNetwork = copy.deepcopy(self.env_2bus)
+        copyNetwork = copy.deepcopy(self)
         rewards=[]
         regrets=[]
         count=0;
