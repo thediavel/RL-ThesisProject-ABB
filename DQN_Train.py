@@ -190,6 +190,7 @@ class DQN:
 
     def test(self, episodes, numOfStepsPerEpisode):
         rewards=[]
+        regrets=[]
         count=0;
         ul=self.numOfSteps;
         self.eval_net.eval();
@@ -212,6 +213,7 @@ class DQN:
                 self.env_2bus.runEnv(False);
             currentState.extend(self.env_2bus.getCurrentStateForDQN())
             rewardForEp=[];
+            rew_aa_ForEp=[]
             for i in range(0,numOfStepsPerEpisode):
                 q_value = self.eval_net.forward(Variable(torch.unsqueeze(torch.FloatTensor(currentState), 0)).cuda());
                 # print(torch.max(q_value, 1)[1].shape)
@@ -228,12 +230,25 @@ class DQN:
                 #     oldMeasurements = currentMeasurements;
                 #     ul+=self.numOfSteps;
                 rewardForEp.append(reward);
+                _,_,_,_, rew_aa = self.runFACTSallActionsRL(busVoltageIndex)
+                rew_aa_ForEp.append(rew_aa)
                 if done == True:
                     break;
                 #print(self.env_2bus.net.res_bus.vm_pu)
                 #print(self.env_2bus.net.res_line)
             rewards.append(sum(rewardForEp));
-            #print(sum(rewards))
+            regrets.append(sum(rew_aa_ForEp) - sum(rewardForEp))
+
+        # PLot reward and regret
+        fig, (ax1, ax2) = plt.subplots(1,2)
+        ax1.scatter(list(range(0, len(rewards))), rewards)
+        ax1.set_ylabel('Reward')
+        ax1.set_xlabel('Episode')
+        ax2.scatter(list(range(0, len(regrets))), regrets)
+        ax2.set_ylabel('Regret')
+        ax2.set_xlabel('Episode')
+        plt.show()
+        #print(sum(rewards))
         #self.writer.add_graph(self.eval_net, Variable(torch.unsqueeze(torch.FloatTensor(currentState), 0)).cuda())
         plt.scatter(list(range(0, len(rewards))), rewards)
         plt.show();
@@ -287,7 +302,7 @@ class DQN:
         busVoltage = self.env_2bus.net.res_bus.vm_pu[busVoltageIndex]
         lp_max = max(self.env_2bus.net.res_line.loading_percent)
         lp_std = np.std(self.env_2bus.net.res_line.loading_percent)
-        return nextStateMeasurements, busVoltage, lp_max, lp_std
+        return nextStateMeasurements, busVoltage, lp_max, lp_std, reward
 
 
 
@@ -307,6 +322,7 @@ class DQN:
         v_RLFACTS_allAct = []
         lp_max_RLFACTS_allAct = []
         lp_std_RLFACTS_allAct = []
+
         self.env_2bus.setMode('test')
         self.env_2bus.reset()
         stateIndex = self.env_2bus.stateIndex
@@ -376,7 +392,7 @@ class DQN:
             lp_std_RLFACTS.append(lp_std)
 
             # RL All actions
-            currentMeasurements, voltage, lp_max, lp_std = qObj_env_RLFACTS_allAct.runFACTSallActionsRL(bus_index_voltage)
+            currentMeasurements, voltage, lp_max, lp_std, _ = qObj_env_RLFACTS_allAct.runFACTSallActionsRL(bus_index_voltage)
             v_RLFACTS_allAct.append(voltage)
             lp_max_RLFACTS_allAct.append(lp_max)
             lp_std_RLFACTS_allAct.append(lp_std)
