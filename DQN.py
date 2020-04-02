@@ -107,7 +107,7 @@ class DQN:
         loss.backward()
         self.optimizer.step()
         self.runningLoss+=loss.item()
-        if self.learn_step_counter % 1000 == 999:  # every 1000 mini-batches...
+        if self.learn_step_counter % 1000 == 0:  # every 1000 mini-batches...
 
             # ...log the running loss
             self.writer.add_scalar('training loss',
@@ -299,8 +299,6 @@ class DQN:
             action = self.getActionFromIndex(i)
             nextStateMeas, rew, done = copyNetwork.takeAction(action[0], action[1], 'dqn')
             copyNetwork.stateIndex -= 1
-            #copyNetwork.scaleLoadAndPowerValue(copyNetwork.stateIndex);
-            #copyNetwork.runEnv()
             bestAction = action if rew > reward else bestAction  # Save best action
         # Take best action in actual environment
         nextStateMeasurements, reward, done = self.env_2bus.takeAction(bestAction[0], bestAction[1],'dqn')
