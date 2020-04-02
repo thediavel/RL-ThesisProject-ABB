@@ -9,6 +9,7 @@ import os
 import matplotlib.pyplot as plt
 import copy
 import statistics as stat
+from torch.utils.tensorboard import SummaryWriter
 
 class DQN:
     def __init__(self, ieeeBusSystem, lr, memorySize, batchSize,  decayRate, numOfEpisodes, stepsPerEpisode, epsilon, annealingConstant, annealAfter, targetUpdateAfter):
@@ -18,6 +19,7 @@ class DQN:
         self.memory_counter = 0  # for storing memory
         self.memory_capacity=memorySize;
         self.memory = np.zeros((memorySize, 12 * 2 + 2))  # initialize memory
+        self.learningRate=lr
         self.optimizer = torch.optim.Adam(self.eval_net.parameters(), lr=lr)
         self.loss_func = nn.MSELoss()
         self.batch_size=batchSize
@@ -32,9 +34,11 @@ class DQN:
         self.env_2bus = powerGrid_ieee2();
         self.actions=['v_ref:'+str(x)+';lp_ref:'+str(y) for x in self.env_2bus.actionSpace['v_ref_pu'] for y in self.env_2bus.actionSpace['lp_ref']]
         self.allRewards=[];
-        self.checkPoint = 'DQN_Checkpoints/dqn_lr' + str(lr) +'tua'+str(targetUpdateAfter)+'bs' +str(batchSize)+'ms'+str(memorySize)+'dr' + str(decayRate) + 'noe' + str(
+        self.fileName='dqn_lr' + str(lr) +'tua'+str(targetUpdateAfter)+'bs' +str(batchSize)+'ms'+str(memorySize)+'dr' + str(decayRate) + 'noe' + str(
             numOfEpisodes) + 'spe' + str(stepsPerEpisode) + 'e' + str(epsilon) + 'ac' + str(
-            annealingConstant) + 'aa' + str(annealAfter) +'.tar';
+            annealingConstant) + 'aa' + str(annealAfter);
+        self.checkPoint = 'DQN_Checkpoints/'+self.fileName+'.tar';
+
         if os.path.isfile(self.checkPoint):
             print('loading state values from last saved checkpoint');
             checkpoint = torch.load(self.checkPoint);
@@ -57,6 +61,7 @@ class DQN:
                         state[k] = v.cuda()
             #if next(self.eval_net.parameters()).is_cuda:
             #    print('done')
+
 
     def store_transition(self, s, a, r, s_):
         transition = np.hstack((s, [a, r], s_))
@@ -101,13 +106,30 @@ class DQN:
         self.optimizer.zero_grad()
         loss.backward()
         self.optimizer.step()
+        self.runningLoss+=loss.item()
+        if self.learn_step_counter % 1000 == 999:  # every 1000 mini-batches...
+
+            # ...log the running loss
+            self.writer.add_scalar('training loss',
+                              self.runningLoss / 1000,
+                              self.learn_step_counter)
+
+            # ...log a Matplotlib Figure showing the model's predictions on a
+            # random mini-batch
+            #self.writer.add_figure('predictions vs. actuals',
+            #                  plot_classes_preds(net, inputs, labels),
+            #                  global_step=epoch * len(trainloader) + i)
+            self.runningLoss = 0.0
 
     def train(self):
+        self.writer = SummaryWriter(
+            'runs/' + self.fileName);
         print('epsilon: ' + str(self.epsilon))
         print('Has already been  trained for following num of episodes: ' + str(len(self.allRewards)))
         noe = self.numOfEpisodes - len(self.allRewards)
         self.eval_net.train();
         self.env_2bus.setMode('train')
+        self.runningLoss=0;
         for i in range(0, noe):
             accumulatedReward = 0;
             self.env_2bus.reset();
@@ -174,6 +196,13 @@ class DQN:
         ul=self.numOfSteps;
         self.eval_net.eval();
         self.env_2bus.setMode('test')
+        #self.writer = SummaryWriter(
+        #    'runs/dqn_lr' + str(self.learningRate) + 'tua' + str(self.target_update_iter) + 'bs' + str(
+        #        self.batch_size) + 'ms' + str(
+        #        self.memory_capacity) + 'dr' + str(self.decayRate) + 'noe' + str(
+        #        self.numOfEpisodes) + 'spe' + str(self.numOfSteps) + 'e' + str(self.epsilon) + 'ac' + str(
+        #        self.annealingRate) + 'aa' + str(self.annealAfter))
+
         for j in range(0,episodes):
             self.env_2bus.reset();
             currentState = [];
@@ -220,6 +249,10 @@ class DQN:
         ax2.set_ylabel('Regret')
         ax2.set_xlabel('Episode')
         plt.show()
+        #print(sum(rewards))
+        #self.writer.add_graph(self.eval_net, Variable(torch.unsqueeze(torch.FloatTensor(currentState), 0)).cuda())
+        plt.scatter(list(range(0, len(rewards))), rewards)
+        plt.show();
 
     def lp_ref(self):
         return stat.mean(self.env_2bus.net.res_line.loading_percent)
@@ -474,9 +507,11 @@ class DQN:
 #dqn2=DQN(2, 0.001, 2000, 32, 0.7, 50000, 24, 1, 0.99, 200,1000)
 
 #dqn4=DQN(2, 0.001, 2000, 32, 0.6, 50000, 24, 1, 0.99, 200, 1000)
-#dqn4.train()
+dqn5=DQN(2, 0.001, 2000, 64, 0.6, 50000, 24, 1, 0.99, 200, 1000)
+#dqn5.train()
 
-#dqn3.comparePerformance(steps=300, oper_upd_interval=6, bus_index_shunt=1, bus_index_voltage=1, line_index=1)
-#dqn3.test(100,24)
+#dqn5.comparePerformance(steps=300, oper_upd_interval=6, bus_index_shunt=1, bus_index_voltage=1, line_index=1)
+#dqn4.test(10,24)
 #for i in range(0,3):
 #    print(i)
+dqn5.test(10,24,1)
