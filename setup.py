@@ -22,6 +22,12 @@ class powerGrid_ieee4:
             self.loadProfile = pickle.load(pickle_file)
         with open('Data/generatorValuesEvery5mins.pkl', 'rb') as pickle_file:
             self.powerProfile = pickle.load(pickle_file)
+
+        with open('Data/trainIndices.pkl', 'rb') as pickle_file:
+            self.trainIndices = pickle.load(pickle_file)
+        with open('Data/testIndices.pkl', 'rb') as pickle_file:
+            self.testIndices = pickle.load(pickle_file)
+
         self.k_old=0;
         self.q_old=0;
         self.actionSpace = {'v_ref_pu': [i*5 / 100 for i in range(16, 25)], 'lp_ref': [i * 5 for i in range(0, 31)]}
@@ -291,11 +297,9 @@ class powerGrid_ieee2:
         with open('Data/testIndices.pkl', 'rb') as pickle_file:
             self.testIndices = pickle.load(pickle_file)
 
-        print(max(self.loadProfile))
-        print(np.mean(self.loadProfile))
-        print(max(self.loadProfile)/np.mean(self.loadProfile))
 
         self.actionSpace = {'v_ref_pu': [i*5 / 100 for i in range(16, 25)], 'lp_ref': [i * 15 for i in range(0, 11)]}
+        self.deepActionSpace = {'v_ref_pu': [i * 5 / 100 for i in range(16, 25)], 'lp_ref': [i * 5 for i in range(0, 31)]}
         self.k_old = 0;
         self.q_old = 0;
 
@@ -516,14 +520,14 @@ class powerGrid_ieee2:
         self.net.switch.at[0, 'closed'] = True
         if lp_ref != 'na' and v_ref_pu != 'na':
             ##shunt compenstation
-            #q_comp = self.Shunt_q_comp(v_ref_pu, bus_index_shunt, self.q_old);
-            #self.q_old=q_comp;
-            #self.net.shunt.q_mvar = q_comp;
+            q_comp = self.Shunt_q_comp(v_ref_pu, bus_index_shunt, self.q_old);
+            self.q_old=q_comp;
+            self.net.shunt.q_mvar = q_comp;
             ##series compensation
-            #k_x_comp_pu = self.K_x_comp_pu(lp_ref, 1, self.k_old);
-            #self.k_old = k_x_comp_pu;
-            #x_line_pu=self.X_pu(line_index)
-            #self.net.impedance.loc[0, ['xft_pu', 'xtf_pu']] = x_line_pu * k_x_comp_pu
+            k_x_comp_pu = self.K_x_comp_pu(lp_ref, 1, self.k_old);
+            self.k_old = k_x_comp_pu;
+            x_line_pu=self.X_pu(line_index)
+            self.net.impedance.loc[0, ['xft_pu', 'xtf_pu']] = x_line_pu * k_x_comp_pu
         networkFailure = False
 
         self.stateIndex += 1;
@@ -599,17 +603,11 @@ class powerGrid_ieee2:
         try:
             rew=0;
             for i in range(1,2):
-                if voltages[i] > 1.25 or voltages[i] < 0.8:
-                    rew -= 50;
-                elif voltages[i] > 1.1 or voltages[i] < 0.9:
-                    rew -= 25;
-                elif voltages[i] > 1.05 or voltages[i] < 0.95:
-                    rew -= 10;
-                elif voltages[i] > 1.025 or voltages[i] < 0.975:
-                    rew += 10;
+                if voltages[i]  > 1:
+                    rew=voltages[i]-1;
                 else:
-                    rew+=20;
-            rew = rew;
+                    rew=1-voltages[i];
+                rew = math.exp(rew*10)*-10;
             loadingPercentInstability=np.std(loadingPercent) * len(loadingPercent);
             rew = rew - loadingPercentInstability;
             rew=rew if abs(loadAngle)<30 else rew-200;

@@ -12,8 +12,18 @@ import statistics as stat
 from torch.utils.tensorboard import SummaryWriter
 
 class DQN:
-    def __init__(self, ieeeBusSystem, lr, memorySize, batchSize,  decayRate, numOfEpisodes, stepsPerEpisode, epsilon, annealingConstant, annealAfter, targetUpdateAfter):
-        self.eval_net, self.target_net = ieee2_net(12,99,0.3), ieee2_net(12,99)
+    def __init__(self, ieeeBusSystem, lr, memorySize, batchSize,  decayRate, numOfEpisodes, stepsPerEpisode, epsilon, annealingConstant, annealAfter, targetUpdateAfter,expandActions=False):
+        self.env_2bus = powerGrid_ieee2();
+        if expandActions:
+            self.actions = ['v_ref:' + str(x) + ';lp_ref:' + str(y) for x in self.env_2bus.deepActionSpace['v_ref_pu']
+                            for y
+                            in self.env_2bus.deepActionSpace['lp_ref']]
+        else:
+            self.actions = ['v_ref:' + str(x) + ';lp_ref:' + str(y) for x in self.env_2bus.actionSpace['v_ref_pu'] for y
+                            in self.env_2bus.actionSpace['lp_ref']]
+
+        op=len(self.actions)
+        self.eval_net, self.target_net = ieee2_net(12,op,0.3), ieee2_net(12,op)
         USE_CUDA = torch.cuda.is_available();
         self.learn_step_counter = 0  # for target updating
         self.memory_counter = 0  # for storing memory
@@ -31,12 +41,10 @@ class DQN:
         self.decayRate = decayRate
         self.annealAfter = annealAfter
         self.target_update_iter=targetUpdateAfter
-        self.env_2bus = powerGrid_ieee2();
-        self.actions=['v_ref:'+str(x)+';lp_ref:'+str(y) for x in self.env_2bus.actionSpace['v_ref_pu'] for y in self.env_2bus.actionSpace['lp_ref']]
         self.allRewards=[];
         self.fileName='dqn_lr' + str(lr) +'tua'+str(targetUpdateAfter)+'bs' +str(batchSize)+'ms'+str(memorySize)+'dr' + str(decayRate) + 'noe' + str(
             numOfEpisodes) + 'spe' + str(stepsPerEpisode) + 'e' + str(epsilon) + 'ac' + str(
-            annealingConstant) + 'aa' + str(annealAfter);
+            annealingConstant) + 'aa' + str(annealAfter)+'op'+str(op);
         self.checkPoint = 'DQN_Checkpoints/'+self.fileName+'.tar';
 
         if os.path.isfile(self.checkPoint):
@@ -61,7 +69,6 @@ class DQN:
                         state[k] = v.cuda()
             #if next(self.eval_net.parameters()).is_cuda:
             #    print('done')
-
 
     def store_transition(self, s, a, r, s_):
         transition = np.hstack((s, [a, r], s_))
@@ -107,12 +114,20 @@ class DQN:
         loss.backward()
         self.optimizer.step()
         self.runningLoss+=loss.item()
+        self.runningRewards+=sum(b_memory[:, 12 + 1:12 + 2])/self.batch_size
+
         if self.learn_step_counter % 1000 == 0:  # every 1000 mini-batches...
 
             # ...log the running loss
             self.writer.add_scalar('training loss',
                               self.runningLoss / 1000,
                               self.learn_step_counter)
+
+            self.writer.add_scalar('avg Reward',
+                                   self.runningRewards/1000,
+                                   self.learn_step_counter)
+            self.runningRewards = 0;
+
 
             # ...log a Matplotlib Figure showing the model's predictions on a
             # random mini-batch
@@ -130,6 +145,7 @@ class DQN:
         self.eval_net.train();
         self.env_2bus.setMode('train')
         self.runningLoss=0;
+        self.runningRewards=0;
         for i in range(0, noe):
             accumulatedReward = 0;
             self.env_2bus.reset();
@@ -194,7 +210,7 @@ class DQN:
         count=0;
         ul=self.numOfSteps;
         self.eval_net.eval();
-        self.env_2bus.setMode('test') # Must copy after mode is set
+        self.env_2bus.setMode('test')
         copyNetwork = copy.deepcopy(self)
         #self.writer = SummaryWriter(
         #    'runs/dqn_lr' + str(self.learningRate) + 'tua' + str(self.target_update_iter) + 'bs' + str(
@@ -307,9 +323,7 @@ class DQN:
         lp_std = np.std(self.env_2bus.net.res_line.loading_percent)
         return nextStateMeasurements, busVoltage, lp_max, lp_std, reward
 
-
-
-    def comparePerformance(self, steps, oper_upd_interval, bus_index_shunt, bus_index_voltage, line_index):
+    def comparePerformance(self, steps, oper_upd_interval, bus_index_shunt, bus_index_voltage, line_index,testAllActionsFlag):
         v_noFACTS = []
         lp_max_noFACTS = []
         lp_std_noFACTS = []
@@ -350,7 +364,8 @@ class DQN:
         qObj_env_FACTS = copy.deepcopy(self)
         qObj_env_RLFACTS = copy.deepcopy(self)
         qObj_env_FACTS_noSeries = copy.deepcopy(self)
-        qObj_env_RLFACTS_allAct = copy.deepcopy(self)
+        if testAllActionsFlag:
+            qObj_env_RLFACTS_allAct = copy.deepcopy(self)
 
         # To plot horizontal axis in nose-curve
         load_nom_pu = 2 #the nominal IEEE load in pu
@@ -394,11 +409,12 @@ class DQN:
             lp_max_RLFACTS.append(lp_max)
             lp_std_RLFACTS.append(lp_std)
 
+            if testAllActionsFlag:
             # RL All actions
-            currentMeasurements, voltage, lp_max, lp_std, _ = qObj_env_RLFACTS_allAct.runFACTSallActionsRL(bus_index_voltage)
-            v_RLFACTS_allAct.append(voltage)
-            lp_max_RLFACTS_allAct.append(lp_max)
-            lp_std_RLFACTS_allAct.append(lp_std)
+                currentMeasurements, voltage, lp_max, lp_std, _ = qObj_env_RLFACTS_allAct.runFACTSallActionsRL(bus_index_voltage)
+                v_RLFACTS_allAct.append(voltage)
+                lp_max_RLFACTS_allAct.append(lp_max)
+                lp_std_RLFACTS_allAct.append(lp_std)
 
             # Increment state
             stateIndex += 1
@@ -406,7 +422,8 @@ class DQN:
             qObj_env_FACTS.env_2bus.scaleLoadAndPowerValue(stateIndex)
             qObj_env_RLFACTS.env_2bus.scaleLoadAndPowerValue(stateIndex)
             qObj_env_FACTS_noSeries.env_2bus.scaleLoadAndPowerValue(stateIndex)
-            qObj_env_RLFACTS_allAct.env_2bus.scaleLoadAndPowerValue(stateIndex)
+            if testAllActionsFlag:
+                qObj_env_RLFACTS_allAct.env_2bus.scaleLoadAndPowerValue(stateIndex)
 
             #print(i)
 
@@ -424,9 +441,10 @@ class DQN:
         v_RLFACTS.pop(-1)
         lp_max_RLFACTS.pop(-1)
         lp_std_RLFACTS.pop(-1)
-        v_RLFACTS_allAct.pop(-1)
-        lp_max_RLFACTS_allAct.pop(-1)
-        lp_std_RLFACTS_allAct.pop(-1)
+        if testAllActionsFlag:
+            v_RLFACTS_allAct.pop(-1)
+            lp_max_RLFACTS_allAct.pop(-1)
+            lp_std_RLFACTS_allAct.pop(-1)
 
         # Make plots
         i_list = list(range(1, steps))
@@ -438,7 +456,8 @@ class DQN:
         ax1.plot(i_list, v_FACTS, color='g')
         ax1.plot(i_list, v_FACTS_noSeries, color='k')
         ax1.plot(i_list, v_RLFACTS, color='r')
-        ax1.plot(i_list, v_RLFACTS_allAct, color='y')
+        if testAllActionsFlag:
+         ax1.plot(i_list, v_RLFACTS_allAct, color='y')
 
         ax1.legend(['v no facts', 'v facts' , 'v facts no series comp','v RL facts', 'v RL all act.'], loc=2)
         ax2 = ax1.twinx()
@@ -449,7 +468,8 @@ class DQN:
         ax2.plot(i_list, lp_std_FACTS, color='g',linestyle = 'dashed')
         ax2.plot(i_list, lp_std_FACTS_noSeries, color='k', linestyle = 'dashed')
         ax2.plot(i_list, lp_std_RLFACTS, color='r', linestyle = 'dashed')
-        ax2.plot(i_list, lp_std_RLFACTS_allAct, color='y', linestyle='dashed')
+        if testAllActionsFlag:
+            ax2.plot(i_list, lp_std_RLFACTS_allAct, color='y', linestyle='dashed')
         ax2.legend(['std lp no facts', 'std lp facts', 'std lp facts no series comp', 'std lp RL facts', 'std lp RL all act.'], loc=1)
         plt.show()
 
@@ -464,8 +484,9 @@ class DQN:
         lp_max_RLFACTS_sorted = [x for _, x in sorted(zip(loading_arr, lp_max_RLFACTS))]
         v_FACTS_noSeries_sorted = [x for _, x in sorted(zip(loading_arr, v_FACTS_noSeries))]
         lp_max_FACTS_noSeries_sorted = [x for _, x in sorted(zip(loading_arr, lp_max_FACTS_noSeries))]
-        v_RLFACTS_allAct_sorted = [x for _, x in sorted(zip(loading_arr, v_RLFACTS_allAct))]
-        lp_max_RLFACTS_allAct_sorted = [x for _, x in sorted(zip(loading_arr, lp_max_RLFACTS_allAct))]
+        if testAllActionsFlag:
+            v_RLFACTS_allAct_sorted = [x for _, x in sorted(zip(loading_arr, v_RLFACTS_allAct))]
+            lp_max_RLFACTS_allAct_sorted = [x for _, x in sorted(zip(loading_arr, lp_max_RLFACTS_allAct))]
 
         #Trim arrays to only include values <= 100 % loading percentage
         lp_limit_for_noseCurve = 100
@@ -473,19 +494,22 @@ class DQN:
         lp_max_FACTS_sorted_trim = [x for x in lp_max_FACTS_sorted if x <= lp_limit_for_noseCurve]
         lp_max_RLFACTS_sorted_trim = [x for x in lp_max_RLFACTS_sorted if x <= lp_limit_for_noseCurve]
         lp_max_FACTS_noSeries_sorted_trim = [x for x in lp_max_FACTS_noSeries_sorted if x <= lp_limit_for_noseCurve]
-        lp_max_RLFACTS_allAct_sorted_trim = [x for x in lp_max_RLFACTS_allAct_sorted if x <= lp_limit_for_noseCurve]
+        if testAllActionsFlag:
+            lp_max_RLFACTS_allAct_sorted_trim = [x for x in lp_max_RLFACTS_allAct_sorted if x <= lp_limit_for_noseCurve]
 
         v_noFACTS_sorted_trim = v_noFACTS_sorted[0:len(lp_max_noFACTS_sorted_trim)]
         v_FACTS_sorted_trim = v_FACTS_sorted[0:len(lp_max_FACTS_sorted_trim)]
         v_RLFACTS_sorted_trim = v_RLFACTS_sorted[0:len(lp_max_RLFACTS_sorted_trim)]
         v_FACTS_noSeries_sorted_trim = v_FACTS_noSeries_sorted[0:len(lp_max_FACTS_noSeries_sorted_trim)]
-        v_RLFACTS_allAct_sorted_trim = v_RLFACTS_allAct_sorted[0:len(lp_max_RLFACTS_allAct_sorted_trim)]
+        if testAllActionsFlag:
+            v_RLFACTS_allAct_sorted_trim = v_RLFACTS_allAct_sorted[0:len(lp_max_RLFACTS_allAct_sorted_trim)]
 
         loading_arr_plot_noFACTS = loading_arr_sorted[0:len(lp_max_noFACTS_sorted_trim)]
         loading_arr_plot_FACTS = loading_arr_sorted[0:len(lp_max_FACTS_sorted_trim)]
         loading_arr_plot_RLFACTS = loading_arr_sorted[0:len(lp_max_RLFACTS_sorted_trim)]
         loading_arr_plot_FACTS_noSeries = loading_arr_sorted[0:len(lp_max_FACTS_noSeries_sorted_trim)]
-        loading_arr_plot_RLFACTS_allAct = loading_arr_sorted[0:len(lp_max_RLFACTS_allAct_sorted_trim)]
+        if testAllActionsFlag:
+            loading_arr_plot_RLFACTS_allAct = loading_arr_sorted[0:len(lp_max_RLFACTS_allAct_sorted_trim)]
 
         #Plot Nose Curve
         fig2 = plt.figure()
@@ -494,22 +518,10 @@ class DQN:
         plt.plot(loading_arr_plot_FACTS, v_FACTS_sorted_trim, Figure=fig2, color='g')
         plt.plot(loading_arr_plot_FACTS_noSeries, v_FACTS_noSeries_sorted_trim, Figure=fig2, color='k')
         plt.plot(loading_arr_plot_RLFACTS, v_RLFACTS_sorted_trim, Figure=fig2, color='r')
-        plt.plot(loading_arr_plot_RLFACTS_allAct, v_RLFACTS_allAct_sorted_trim, Figure=fig2, color='y')
+        if testAllActionsFlag:
+            plt.plot(loading_arr_plot_RLFACTS_allAct, v_RLFACTS_allAct_sorted_trim, Figure=fig2, color='y')
         plt.xlabel('Loading [p.u.]',  Figure=fig2)
         plt.ylabel('Bus Voltage [p.u.]',  Figure=fig2, color=color)
         plt.legend(['v no FACTS', 'v FACTS', 'v FACTS no series comp','v RL FACTS', 'v RL FACTS all act.'], loc=2)
         plt.show()
 
-#dqn1=DQN(2, 0.001, 2000, 64, 0.7, 25000, 24, 1, 0.98, 200,200)
-#dqn3=DQN(2, 0.001, 2000, 128, 0.7, 50000, 24, 1, 0.99, 200,1000)
-#dqn2=DQN(2, 0.001, 2000, 32, 0.7, 50000, 24, 1, 0.99, 200,1000)
-
-#dqn4=DQN(2, 0.001, 2000, 32, 0.6, 50000, 24, 1, 0.99, 200, 1000)
-#dqn5=DQN(2, 0.001, 2000, 64, 0.6, 50000, 24, 1, 0.99, 200, 1000)
-#dqn5.train()
-
-#dqn5.comparePerformance(steps=300, oper_upd_interval=6, bus_index_shunt=1, bus_index_voltage=1, line_index=1)
-#dqn4.test(10,24)
-#for i in range(0,3):
-#    print(i)
-#dqn5.test(10,24,1)

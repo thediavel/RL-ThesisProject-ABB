@@ -89,6 +89,7 @@ class qLearning:
     ## Test and plot accumulated reward given a number of episodes and steps per episode
     ## Also prints number of unique states visited
     def test(self, episodes, numOfStepsPerEpisode):
+        self.env_2bus.setMode('test')
         rewards=[]
         count=0;
         ul=self.numOfSteps;
@@ -230,46 +231,47 @@ class qLearning:
 
     ## Train algorithm
     def train(self):
-            print('epsilon: ' + str(self.epsilon))
-            print('Has already been  trained for following num of episodes: ' + str(len(self.allRewards)))
-            noe=self.numOfEpisodes - len(self.allRewards)
-            for i in range(0,noe):
-                accumulatedReward=0;
-                self.env_2bus.reset();
-                currentMeasurements = self.env_2bus.getCurrentState();
-                oldMeasurements = currentMeasurements; # current and old same first step of episode
-                for j in range(0,self.numOfSteps):
-                    epsComp = np.random.random();
-                    currentState=self.getStateFromMeasurements_2([oldMeasurements,currentMeasurements]);
-                    if epsComp <= self.epsilon:
+        self.env_2bus.setMode('train')
+        print('epsilon: ' + str(self.epsilon))
+        print('Has already been  trained for following num of episodes: ' + str(len(self.allRewards)))
+        noe=self.numOfEpisodes - len(self.allRewards)
+        for i in range(0,noe):
+            accumulatedReward=0;
+            self.env_2bus.reset();
+            currentMeasurements = self.env_2bus.getCurrentState();
+            oldMeasurements = currentMeasurements; # current and old same first step of episode
+            for j in range(0,self.numOfSteps):
+                epsComp = np.random.random();
+                currentState=self.getStateFromMeasurements_2([oldMeasurements,currentMeasurements]);
+                if epsComp <= self.epsilon:
                         # Exploration Part
-                        actionIndex = np.random.choice(99, 1)[0]
-                    else:
+                     actionIndex = np.random.choice(99, 1)[0]
+                else:
                         # Greedy Approach
-                        actionIndex=self.q_table[currentState].idxmax();
-                    action = self.getActionFromIndex(actionIndex);
-                    oldMeasurements=currentMeasurements;
-                    currentMeasurements, reward, done = self.env_2bus.takeAction(action[0],action[1])
-                    accumulatedReward += reward;
-                    if done:
-                        nextStateMaxQValue = 0;
-                    else:
-                        nextState = self.getStateFromMeasurements_2([oldMeasurements,currentMeasurements]);
-                        nextStateMaxQValue=self.q_table[nextState].max();
+                    actionIndex=self.q_table[currentState].idxmax();
+                action = self.getActionFromIndex(actionIndex);
+                oldMeasurements=currentMeasurements;
+                currentMeasurements, reward, done = self.env_2bus.takeAction(action[0],action[1])
+                accumulatedReward += reward;
+                if done:
+                    nextStateMaxQValue = 0;
+                else:
+                    nextState = self.getStateFromMeasurements_2([oldMeasurements,currentMeasurements]);
+                    nextStateMaxQValue=self.q_table[nextState].max();
                     # Update Qvalue for given action:
-                    self.q_table.iloc[actionIndex,self.states.index(currentState)] = self.q_table[currentState][actionIndex] + self.learningRate*(reward + self.decayRate*nextStateMaxQValue - self.q_table[currentState][actionIndex])
-                    if done:
-                        break;
-                self.allRewards.append(accumulatedReward);
+                self.q_table.iloc[actionIndex,self.states.index(currentState)] = self.q_table[currentState][actionIndex] + self.learningRate*(reward + self.decayRate*nextStateMaxQValue - self.q_table[currentState][actionIndex])
+                if done:
+                    break;
+            self.allRewards.append(accumulatedReward);
                 # Print progress of training with last reward
-                if (i+1) % self.annealAfter == 0:
-                    print('Episode: ' + str(len(self.allRewards)) + '; reward:' + str(accumulatedReward))
-                    self.epsilon=self.annealingRate*self.epsilon;
-                    print('saving checkpoint data')
-                    pickledData={'q_table':self.q_table, 'e':self.epsilon, 'allRewards':self.allRewards}
-                    pickle.dump(pickledData, open(self.checkPointName, "wb"))
+            if (i+1) % self.annealAfter == 0:
+                print('Episode: ' + str(len(self.allRewards)) + '; reward:' + str(accumulatedReward))
+                self.epsilon=self.annealingRate*self.epsilon;
+                print('saving checkpoint data')
+                pickledData={'q_table':self.q_table, 'e':self.epsilon, 'allRewards':self.allRewards}
+                pickle.dump(pickledData, open(self.checkPointName, "wb"))
 
-            print('training finished')
+        print('training finished')
 
     ## Return system operator set reference for series compensation device. Assumed that the mean of all lines is the goal
     def lp_ref(self):
@@ -327,8 +329,9 @@ class qLearning:
         v_FACTS_noSeries = []
         lp_max_FACTS_noSeries = []
         lp_std_FACTS_noSeries = []
-
+        self.env_2bus.setMode('test')
         self.env_2bus.reset()
+
         stateIndex = self.env_2bus.stateIndex
         loadProfile = self.env_2bus.loadProfile
         while stateIndex + steps > len(loadProfile):
