@@ -25,10 +25,10 @@ class ieee4_net(nn.Module):
 class ieee2_net(nn.Module):
     def __init__(self, inputs, num_actions,p=0.5):
         super(ieee2_net, self).__init__()
-        self.fc1 = nn.Linear(inputs, 24);
-        self.fc2 = nn.Linear(24, 36);
-        self.fc3 = nn.Linear(36, 72);
-        self.fc4 = nn.Linear(72, num_actions)
+        self.fc1 = nn.Linear(inputs, 6);
+        self.fc2 = nn.Linear(6, 18);
+        self.fc3 = nn.Linear(18, 54);
+        self.fc4 = nn.Linear(54, num_actions)
         self.drop_layer = nn.Dropout(p=p)
 
     def forward(self, x):

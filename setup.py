@@ -285,7 +285,7 @@ class powerGrid_ieee4:
 
 
 class powerGrid_ieee2:
-    def __init__(self,numberOfTimeStepsPerState=4):
+    def __init__(self):
         #print('in init. Here we lay down the grid structure and load some random state values based on IEEE dataset');
         with open('Data/JanLoadEvery5mins.pkl', 'rb') as pickle_file:
             self.loadProfile = pickle.load(pickle_file)
@@ -299,7 +299,7 @@ class powerGrid_ieee2:
 
 
         self.actionSpace = {'v_ref_pu': [i*5 / 100 for i in range(16, 25)], 'lp_ref': [i * 15 for i in range(0, 11)]}
-        self.deepActionSpace = {'v_ref_pu': [i * 5 / 100 for i in range(16, 25)], 'lp_ref': [i * 5 for i in range(0, 31)]}
+        self.deepActionSpace = {'v_ref_pu': [i / 100 for i in range(90, 111)], 'lp_ref': [i * 5 for i in range(0, 31)]}
         self.k_old = 0;
         self.q_old = 0;
 
@@ -454,11 +454,8 @@ class powerGrid_ieee2:
         self.nominalP=self.net.load.p_mw[0]
         self.nominalQ=self.net.load.q_mvar[0]
 
-        # Create SHUNT controllers
-        self.shuntControl = ShuntFACTS(net=self, busVoltageInd=1, convLim=0.0005)
-        self.seriesControl = SeriesFACTS(net=self, lineLPInd=1, convLim=0.0005, xline_pu = self.X_pu(1))
 
-        self.numberOfTimeStepsPerState=numberOfTimeStepsPerState;
+
         ## select a random state for the episode
         #self.stateIndex = np.random.randint(len(self.loadProfile)-1-self.numberOfTimeStepsPerState, size=1)[0];
 
@@ -472,13 +469,16 @@ class powerGrid_ieee2:
         try:
             pp.runpp(self.net, run_control=False);
             print('Environment has been successfully initialized');
+            # Create SHUNT controllers
+            self.shuntControl = ShuntFACTS(net=self.net, busVoltageInd=1, convLim=0.0005)
+            self.seriesControl = SeriesFACTS(net=self.net, lineLPInd=1, convLim=0.0005, x_line_pu=self.X_pu(1))
         except:
             print('Some error occurred while creating environment');
             raise Exception('cannot proceed at these settings. Please fix the environment settings');
 
     def getstartingIndex(self):
         index = np.random.randint(len(self.source), size = 1)[0];
-        if self.source[index]+self.numberOfTimeStepsPerState < len(self.loadProfile):
+        if self.source[index] < len(self.loadProfile):
             return self.source[index];
         else:
             return self.getstartingIndex()
@@ -510,29 +510,15 @@ class powerGrid_ieee2:
     ## Take epsilon-greedy action
     ## Return next state measurements, reward, done (boolean)
     def takeAction(self, lp_ref, v_ref_pu,source=''):
-        #q_old = 0
-        bus_index_shunt = 1
-        line_index=1;
-        impedenceBackup = self.net.impedance.loc[0, 'xtf_pu'];
-        shuntBackup = self.net.shunt.q_mvar
-        # Enabling both FACTS devices
-        self.net.switch.at[1, 'closed'] = False
         self.net.switch.at[0, 'closed'] = True
+        self.net.switch.at[1, 'closed'] = False
         if lp_ref != 'na' and v_ref_pu != 'na':
-            ##shunt compenstation
-            q_comp = self.Shunt_q_comp(v_ref_pu, bus_index_shunt, self.q_old);
-            self.q_old=q_comp;
-            self.net.shunt.q_mvar = q_comp;
-            ##series compensation
-            k_x_comp_pu = self.K_x_comp_pu(lp_ref, 1, self.k_old);
-            self.k_old = k_x_comp_pu;
-            x_line_pu=self.X_pu(line_index)
-            self.net.impedance.loc[0, ['xft_pu', 'xtf_pu']] = x_line_pu * k_x_comp_pu
+            self.shuntControl.ref=v_ref_pu;
+            self.seriesControl.ref=lp_ref;
         networkFailure = False
-
-        self.stateIndex += 1;
+        bus_index_shunt=1;
+        line_index=1;
         if self.stateIndex < min(len(self.powerProfile),len(self.loadProfile)):
-            self.scaleLoadAndPowerValue(self.stateIndex);
             try:
                 dummyRes=(self.net.res_bus.vm_pu,self.net.res_line.loading_percent)
                 pp.runpp(self.net, run_control=True);
@@ -540,6 +526,9 @@ class powerGrid_ieee2:
                     reward = self.calculateReward(self.net.res_bus.vm_pu, self.net.res_line.loading_percent,self.net.res_bus.va_degree[bus_index_shunt]);
                 else:
                     reward = self.calculateReward(self.net.res_bus.vm_pu, self.net.res_line.loading_percent);
+                done = self.stateIndex == (len(self.powerProfile)-1)
+                if done==False:
+                    self.incrementLoadProfile()
             except:
                 print('Unstable environment settings');
                 print(lp_ref,v_ref_pu)
@@ -547,12 +536,20 @@ class powerGrid_ieee2:
                 print(self.net.load.p_mw[0],self.net.load.q_mvar[0]);
                 networkFailure = True;
                 reward = -10000;
+                return (-2, -1000,-90), reward, networkFailure;
         else:
             print('wrong block!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
-        s=(self.net.res_bus.vm_pu[bus_index_shunt],self.net.res_line.loading_percent[line_index])
+
         if source=='dqn':
             s=self.getCurrentStateForDQN()
-        return s, reward, self.stateIndex == len(self.powerProfile)-1 or networkFailure;
+        elif source=='qlearning':
+            s = (self.net.res_bus.vm_pu[bus_index_shunt], self.net.res_line.loading_percent[line_index])
+        return s, reward, done ;
+
+    def incrementLoadProfile(self):
+        self.stateIndex += 1;
+        self.scaleLoadAndPowerValue(self.stateIndex);
+        self.runEnv(True);
 
         """
         try:
@@ -582,6 +579,7 @@ class powerGrid_ieee2:
         x_line_ohm = self.net.line.x_ohm_per_km[line_index]
         x_line_pu = x_line_ohm / x_base  # Can take one since this line is divivded into
         # 2 identical lines with length 0.5 km
+        #print(x_line_pu)
         return x_line_pu
 
     ## Resets environment choosing new starting state, used for beginning of each episode
@@ -589,8 +587,6 @@ class powerGrid_ieee2:
         self.stateIndex = self.getstartingIndex()
         self.net.switch.at[0, 'closed'] = False
         self.net.switch.at[1, 'closed'] = True
-        self.k_old = 0;
-        self.q_old = 0;
         self.scaleLoadAndPowerValue(self.stateIndex);
         try:
             pp.runpp(self.net, run_control=False);

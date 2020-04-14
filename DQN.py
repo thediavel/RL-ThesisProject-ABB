@@ -23,12 +23,12 @@ class DQN:
                             in self.env_2bus.actionSpace['lp_ref']]
 
         op=len(self.actions)
-        self.eval_net, self.target_net = ieee2_net(12,op,0.3), ieee2_net(12,op)
+        self.eval_net, self.target_net = ieee2_net(3,op,0.3), ieee2_net(3,op)
         USE_CUDA = torch.cuda.is_available();
         self.learn_step_counter = 0  # for target updating
         self.memory_counter = 0  # for storing memory
         self.memory_capacity=memorySize;
-        self.memory = np.zeros((memorySize, 12 * 2 + 2))  # initialize memory
+        self.memory = np.zeros((memorySize, 3 * 2 + 2))  # initialize memory
         self.learningRate=lr
         self.optimizer = torch.optim.Adam(self.eval_net.parameters(), lr=lr)
         self.loss_func = nn.MSELoss()
@@ -97,10 +97,10 @@ class DQN:
         # sample batch transitions
         sample_index = np.random.choice(self.memory_capacity, self.batch_size)
         b_memory = self.memory[sample_index, :]
-        b_s = Variable(torch.FloatTensor(b_memory[:, :12]).cuda())
-        b_a = Variable(torch.LongTensor(b_memory[:, 12:12 + 1].astype(int)).cuda())
-        b_r = Variable(torch.FloatTensor(b_memory[:, 12 + 1:12 + 2]).cuda())
-        b_s_ = Variable(torch.FloatTensor(b_memory[:, -12:]).cuda())
+        b_s = Variable(torch.FloatTensor(b_memory[:, :3]).cuda())
+        b_a = Variable(torch.LongTensor(b_memory[:, 3:3 + 1].astype(int)).cuda())
+        b_r = Variable(torch.FloatTensor(b_memory[:, 3 + 1:3 + 2]).cuda())
+        b_s_ = Variable(torch.FloatTensor(b_memory[:, -3:]).cuda())
         #b_s.cuda()
         #b_a.cuda()
         #print(b_s.is_cuda)
@@ -114,7 +114,7 @@ class DQN:
         loss.backward()
         self.optimizer.step()
         self.runningLoss+=loss.item()
-        self.runningRewards+=sum(b_memory[:, 12 + 1:12 + 2])/self.batch_size
+        self.runningRewards+=sum(b_memory[:, 3 + 1:3 + 2])/self.batch_size
 
         if self.learn_step_counter % 1000 == 0:  # every 1000 mini-batches...
 
@@ -149,14 +149,7 @@ class DQN:
         for i in range(0, noe):
             accumulatedReward = 0;
             self.env_2bus.reset();
-            currentState=[];
-            for j in range(0,3):
-                m=self.env_2bus.getCurrentStateForDQN();
-                currentState.extend(m);
-                self.env_2bus.stateIndex+=1;
-                self.env_2bus.scaleLoadAndPowerValue(self.env_2bus.stateIndex)
-                self.env_2bus.runEnv(False);
-            currentState.extend(self.env_2bus.getCurrentStateForDQN())
+            currentState=self.env_2bus.getCurrentStateForDQN();
             #print(len(currentState));
             for j in range(0, self.numOfSteps):
                 epsComp = np.random.random();
@@ -174,10 +167,7 @@ class DQN:
                 #oldMeasurements = currentMeasurements;
                 currentMeasurements, reward, done = self.env_2bus.takeAction(action[0], action[1],'dqn');
                 oldState=currentState;
-                currentState.extend(currentMeasurements);
-                currentState.pop(0);
-                currentState.pop(1);
-                currentState.pop(2);
+                currentState=currentMeasurements;
                 #print(len(currentState))
                 self.store_transition(oldState, actionIndex, reward, currentState)
                 accumulatedReward += reward;
@@ -221,14 +211,7 @@ class DQN:
 
         for j in range(0,episodes):
             self.env_2bus.reset();
-            currentState = [];
-            for j in range(0, 3):
-                m = self.env_2bus.getCurrentStateForDQN();
-                currentState.extend(m);
-                self.env_2bus.stateIndex += 1;
-                self.env_2bus.scaleLoadAndPowerValue(self.env_2bus.stateIndex)
-                self.env_2bus.runEnv(False);
-            currentState.extend(self.env_2bus.getCurrentStateForDQN())
+            currentState = self.env_2bus.getCurrentStateForDQN();
             rewardForEp=[];
             rew_aa_ForEp=[]
             for i in range(0,numOfStepsPerEpisode):
@@ -237,15 +220,7 @@ class DQN:
                 actionIndex = torch.max(q_value, 1)[1].data.cpu().numpy()[0]  # return the argmax
                 action = self.getActionFromIndex(actionIndex);
                 # oldMeasurements = currentMeasurements;
-                currentMeasurements, reward, done = self.env_2bus.takeAction(action[0], action[1], 'dqn');
-                #oldState = currentState;
-                currentState.extend(currentMeasurements);
-                currentState.pop(0);
-                currentState.pop(1);
-                currentState.pop(2);
-                # if i == ul-1:
-                #     oldMeasurements = currentMeasurements;
-                #     ul+=self.numOfSteps;
+                currentState, reward, done = self.env_2bus.takeAction(action[0], action[1], 'dqn');
                 rewardForEp.append(reward);
                 _,_,_,_, rew_aa = copyNetwork.runFACTSallActionsRL(busVoltageIndex)
                 rew_aa_ForEp.append(rew_aa)
@@ -349,15 +324,7 @@ class DQN:
             stateIndex = self.env_2bus.stateIndex
             loadProfile = self.env_2bus.loadProfile
 
-        currentState = [];
-        for j in range(0, 3):
-            m = self.env_2bus.getCurrentStateForDQN();
-            currentState.extend(m);
-            self.env_2bus.stateIndex += 1;
-            #self.env_2bus.scaleLoadAndPowerValue(self.env_2bus.stateIndex, self.env_2bus.stateIndex - 1)
-            self.env_2bus.scaleLoadAndPowerValue(self.env_2bus.stateIndex);
-            self.env_2bus.runEnv(False);
-        currentState.extend(self.env_2bus.getCurrentStateForDQN())
+        currentState =self.env_2bus.getCurrentStateForDQN();
 
         # Need seperate copy for each scenario
         qObj_env_noFACTS = copy.deepcopy(self)
@@ -400,11 +367,7 @@ class DQN:
             # RLFACTS
             takeLastAction=False;
             qObj_env_RLFACTS.eval_net.eval();
-            currentMeasurements, voltage, lp_max, lp_std = qObj_env_RLFACTS.runFACTSgreedyRL(bus_index_voltage, currentState, takeLastAction)  # runpp is done within this function
-            currentState.extend(currentMeasurements);
-            currentState.pop(0);
-            currentState.pop(1);
-            currentState.pop(2);
+            currentState, voltage, lp_max, lp_std = qObj_env_RLFACTS.runFACTSgreedyRL(bus_index_voltage, currentState, takeLastAction)  # runpp is done within this function
             v_RLFACTS.append(voltage)
             lp_max_RLFACTS.append(lp_max)
             lp_std_RLFACTS.append(lp_std)
@@ -426,25 +389,6 @@ class DQN:
                 qObj_env_RLFACTS_allAct.env_2bus.scaleLoadAndPowerValue(stateIndex)
 
             #print(i)
-
-        # Adjust arrays so indices are overlapping correctly. otherwise the RL will have i+1:th state where rest has i:th state
-        loading_arr.pop(0)
-        v_noFACTS.pop(0)
-        lp_max_noFACTS.pop(0)
-        lp_std_noFACTS.pop(0)
-        v_FACTS.pop(0)
-        lp_max_FACTS.pop(0)
-        lp_std_FACTS.pop(0)
-        v_FACTS_noSeries.pop(0)
-        lp_max_FACTS_noSeries.pop(0)
-        lp_std_FACTS_noSeries.pop(0)
-        v_RLFACTS.pop(-1)
-        lp_max_RLFACTS.pop(-1)
-        lp_std_RLFACTS.pop(-1)
-        if testAllActionsFlag:
-            v_RLFACTS_allAct.pop(-1)
-            lp_max_RLFACTS_allAct.pop(-1)
-            lp_std_RLFACTS_allAct.pop(-1)
 
         # Make plots
         i_list = list(range(1, steps))
