@@ -10,6 +10,8 @@ import math
 import matplotlib.mlab as mlab
 import matplotlib.pyplot as plt
 import pandapower.control as ct
+import statistics as stat
+from FACTScontrol import SeriesFACTS, ShuntFACTS
 pd.options.display.float_format = '{:.4g}'.format
 
 #### fix lineIndex in ieee-4
@@ -20,7 +22,6 @@ class powerGrid_ieee4:
             self.loadProfile = pickle.load(pickle_file)
         with open('Data/generatorValuesEvery5mins.pkl', 'rb') as pickle_file:
             self.powerProfile = pickle.load(pickle_file)
-
         self.k_old=0;
         self.q_old=0;
         self.actionSpace = {'v_ref_pu': [i*5 / 100 for i in range(16, 25)], 'lp_ref': [i * 5 for i in range(0, 31)]}
@@ -169,44 +170,6 @@ class powerGrid_ieee4:
         # 2 identical lines with length 0.5 km
         return x_line_pu
 
-    def takeAction_old(self,p_ref_pu,v_ref_pu):
-        # print('taking action p_ref_pu='+str(p_ref_pu)+' and observe the grid for reactance component or power losses at stateIndex:');
-        # print(self.stateIndex)
-        S_base = 100e6
-        V_base = 230e3
-        x_base = math.pow(V_base, 2) / S_base
-        x_line_pu =self.net.line.x_ohm_per_km[3] / x_base
-        k_x_comp_pu = self.K_x_comp_pu(p_ref_pu,x_line_pu)
-        k_x_comp_pu=-0.8 if k_x_comp_pu<-0.8 else k_x_comp_pu;
-        k_x_comp_pu = 0.2 if k_x_comp_pu > 0.2 else k_x_comp_pu;
-        if self.net.switch.at[1, 'closed']:
-            self.net.switch.at[1, 'closed'] = False
-            self.net.switch.at[0, 'closed'] = True
-        impedenceBackup=self.net.impedance.loc[0, 'xtf_pu'];
-        shuntBackup=self.net.shunt.q_mvar
-        self.net.impedance.loc[0, ['xft_pu', 'xtf_pu']] = x_line_pu * k_x_comp_pu
-        q_comp = self.Shunt_q_comp( v_ref_pu)
-        self.net.shunt.q_mvar = q_comp
-        networkFailure=False
-        try:
-            pp.runpp(self.net);
-            reward = self.calculateReward(self.net.res_bus.vm_pu);
-        except:
-            networkFailure=True;
-            self.net.shunt.q_mvar=shuntBackup;
-            self.net.impedance.loc[0, ['xft_pu', 'xtf_pu']]=impedenceBackup;
-            pp.runpp(self.net);
-            reward=1000;
-            return self.net.res_bus,reward,True;
-
-        self.stateIndex+=1;
-        if self.stateIndex < len(self.powerProfile):
-            if(self.scaleLoadAndPowerValue(self.stateIndex) == False):
-                networkFailure=True;
-                reward=1000;
-                #self.stateIndex -= 1;
-        return self.net.res_bus,reward,self.stateIndex == len(self.powerProfile) or networkFailure;
-
     def reset(self):
         print('reset the current environment for next episode');
         oldIndex = self.stateIndex;
@@ -328,11 +291,16 @@ class powerGrid_ieee2:
         with open('Data/testIndices.pkl', 'rb') as pickle_file:
             self.testIndices = pickle.load(pickle_file)
 
+        print(max(self.loadProfile))
+        print(np.mean(self.loadProfile))
+        print(max(self.loadProfile)/np.mean(self.loadProfile))
 
         self.actionSpace = {'v_ref_pu': [i*5 / 100 for i in range(16, 25)], 'lp_ref': [i * 15 for i in range(0, 11)]}
         self.k_old = 0;
         self.q_old = 0;
-        ## Basic ieee 4bus system
+
+
+        ## Basic ieee 4bus system to copy parts from
         net_temp=pp.networks.case4gs();
         # COPY PARAMETERS FROM TEMP NETWORK TO USE IN 2 BUS RADIAL SYSTEM.
         # BUSES
@@ -479,8 +447,12 @@ class powerGrid_ieee2:
                                                  type=self.net.line.at[1, 'type'],
                                                  x_ohm_per_km=self.net.line.at[1, 'x_ohm_per_km'])
 
-        self.nominalP=self.net.load.p_mw[0];
+        self.nominalP=self.net.load.p_mw[0]
         self.nominalQ=self.net.load.q_mvar[0]
+
+        # Create SHUNT controllers
+        self.shuntControl = ShuntFACTS(net=self, busVoltageInd=1, convLim=0.0005)
+        self.seriesControl = SeriesFACTS(net=self, lineLPInd=1, convLim=0.0005, xline_pu = self.X_pu(1))
 
         self.numberOfTimeStepsPerState=numberOfTimeStepsPerState;
         ## select a random state for the episode
@@ -527,6 +499,10 @@ class powerGrid_ieee2:
         line_index = 1;
         return [self.net.res_bus.vm_pu[bus_index_shunt], self.net.res_line.loading_percent[line_index], self.net.res_bus.va_degree[bus_index_shunt]];
 
+    # Return mean line loading in system. Emulation of what system operator would have set loading reference to.
+    def lp_ref_operator(self):
+        return stat.mean(self.net.res_line.loading_percent)
+
     ## Take epsilon-greedy action
     ## Return next state measurements, reward, done (boolean)
     def takeAction(self, lp_ref, v_ref_pu,source=''):
@@ -540,14 +516,14 @@ class powerGrid_ieee2:
         self.net.switch.at[0, 'closed'] = True
         if lp_ref != 'na' and v_ref_pu != 'na':
             ##shunt compenstation
-            q_comp = self.Shunt_q_comp(v_ref_pu, bus_index_shunt, self.q_old);
-            self.q_old=q_comp;
-            self.net.shunt.q_mvar = q_comp;
+            #q_comp = self.Shunt_q_comp(v_ref_pu, bus_index_shunt, self.q_old);
+            #self.q_old=q_comp;
+            #self.net.shunt.q_mvar = q_comp;
             ##series compensation
-            k_x_comp_pu = self.K_x_comp_pu(lp_ref, 1, self.k_old);
-            self.k_old = k_x_comp_pu;
-            x_line_pu=self.X_pu(line_index)
-            self.net.impedance.loc[0, ['xft_pu', 'xtf_pu']] = x_line_pu * k_x_comp_pu
+            #k_x_comp_pu = self.K_x_comp_pu(lp_ref, 1, self.k_old);
+            #self.k_old = k_x_comp_pu;
+            #x_line_pu=self.X_pu(line_index)
+            #self.net.impedance.loc[0, ['xft_pu', 'xtf_pu']] = x_line_pu * k_x_comp_pu
         networkFailure = False
 
         self.stateIndex += 1;
@@ -637,7 +613,6 @@ class powerGrid_ieee2:
             loadingPercentInstability=np.std(loadingPercent) * len(loadingPercent);
             rew = rew - loadingPercentInstability;
             rew=rew if abs(loadAngle)<30 else rew-200;
-            #rew = rew if abs(loadAngle)<30 else (rew - 200)
         except:
             print('exception in calculate reward')
             print(voltages);
@@ -662,46 +637,46 @@ class powerGrid_ieee2:
         #self.net.sgen.q_mvar = self.net.sgen.q_mvar * scalingFactorPower;
 
 
-    ## Transition from reference line loading to reactance of series comp
-    def K_x_comp_pu(self, loading_perc_ref, line_index, k_old):
-        c = 5  # Coefficient for transition tuned to hit equal load sharing at nominal IEEE
-        #print((loading_perc_ref,line_index,k_old))
-        k_x_comp_max_ind = 0.4
-        k_x_comp_max_cap = -k_x_comp_max_ind
-        loading_perc_meas = self.net.res_line.loading_percent[line_index]
-        k_delta = (c * k_x_comp_max_ind * (
-                    loading_perc_meas - loading_perc_ref) / 100) - k_old  # 100 To get percentage in pu
-        k_x_comp = k_delta + k_old
-
-        # Bypassing series device if impedance close to 0
-        if abs(k_x_comp) < 0.0001:  # Helping with convergence
-            self.net.switch.closed[1] = True  # ACTUAL network, not a copy
-
-        if k_x_comp > k_x_comp_max_ind:
-            k_x_comp = k_x_comp_max_ind
-        if k_x_comp < k_x_comp_max_cap:
-            k_x_comp = k_x_comp_max_cap
-        return k_x_comp
-
-    ## Transition from reference voltage to Q output of shunt device
-    def Shunt_q_comp(self, v_ref_pu, bus_index, q_old):
-        v_bus_pu = self.net.res_bus.vm_pu[bus_index]
-        k = 10  # Coefficient for transition, tuned to hit 1 pu with nominal IEEE
-        q_rated = 100  # Mvar
-        q_min = -q_rated
-        q_max = q_rated
-        q_delta = k * q_rated * (
-                    v_bus_pu - v_ref_pu) - q_old  # q_old might come in handy later with RL if able to take actions without
-        # independent change in environment
-        q_comp = q_delta + q_old
-
-        if q_comp > q_max:
-            q_comp = q_max
-        if q_comp < q_min:
-            q_comp = q_min
-
-        # print(q_comp)
-        return q_comp
+    # ## Transition from reference line loading to reactance of series comp
+    # def K_x_comp_pu(self, loading_perc_ref, line_index, k_old):
+    #     c = 5  # Coefficient for transition tuned to hit equal load sharing at nominal IEEE
+    #     #print((loading_perc_ref,line_index,k_old))
+    #     k_x_comp_max_ind = 0.4
+    #     k_x_comp_max_cap = -k_x_comp_max_ind
+    #     loading_perc_meas = self.net.res_line.loading_percent[line_index]
+    #     k_delta = (c * k_x_comp_max_ind * (
+    #                 loading_perc_meas - loading_perc_ref) / 100) - k_old  # 100 To get percentage in pu
+    #     k_x_comp = k_delta + k_old
+    #
+    #     # Bypassing series device if impedance close to 0
+    #     if abs(k_x_comp) < 0.0001:  # Helping with convergence
+    #         self.net.switch.closed[1] = True  # ACTUAL network, not a copy
+    #
+    #     if k_x_comp > k_x_comp_max_ind:
+    #         k_x_comp = k_x_comp_max_ind
+    #     if k_x_comp < k_x_comp_max_cap:
+    #         k_x_comp = k_x_comp_max_cap
+    #     return k_x_comp
+    #
+    # ## Transition from reference voltage to Q output of shunt device
+    # def Shunt_q_comp(self, v_ref_pu, bus_index, q_old):
+    #     v_bus_pu = self.net.res_bus.vm_pu[bus_index]
+    #     k = 10  # Coefficient for transition, tuned to hit 1 pu with nominal IEEE
+    #     q_rated = 100  # Mvar
+    #     q_min = -q_rated
+    #     q_max = q_rated
+    #     q_delta = k * q_rated * (
+    #                 v_bus_pu - v_ref_pu) - q_old  # q_old might come in handy later with RL if able to take actions without
+    #     # independent change in environment
+    #     q_comp = q_delta + q_old
+    #
+    #     if q_comp > q_max:
+    #         q_comp = q_max
+    #     if q_comp < q_min:
+    #         q_comp = q_min
+    #
+    #     # print(q_comp)
+    #     return q_comp
 
 
 ##Load Profile data has been pickled already, do not run this function for now
