@@ -102,12 +102,15 @@ class SeriesFACTS(ct.basic_controller.Controller):
     def is_converged(self):
         self.meas = self.net.res_line.loading_percent[self.lineLPInd]
         # Converged if within limit or output maxed for three iterations without convergence
-        if abs(self.meas - self.ref) < self.convLim or self.maxed_counter >= 4 or self.iter_counter == self.max_iter:
+        if abs(self.meas - self.ref)/100 < self.convLim or self.maxed_counter >= 4 or self.iter_counter == self.max_iter:
             self.applied = True
         return self.applied
 
     # In case the controller is not yet converged, the control step is executed.
     def control_step(self):
+        # Make sure it is enabled
+        self.net.switch.closed[self.switchInd] = True
+
         # Measurement
         self.meas = self.net.res_line.loading_percent[self.lineLPInd]
         self.lp_delta = (self.meas - self.ref) / 100  # div by 100 to get value between 0-1
