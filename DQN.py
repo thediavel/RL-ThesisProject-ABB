@@ -12,8 +12,9 @@ import statistics as stat
 from torch.utils.tensorboard import SummaryWriter
 
 class DQN:
-    def __init__(self, ieeeBusSystem, lr, memorySize, batchSize,  decayRate, numOfEpisodes, stepsPerEpisode, epsilon, annealingConstant, annealAfter, targetUpdateAfter,expandActions=False):
+    def __init__(self, ieeeBusSystem, lr, memorySize, batchSize,  decayRate, numOfEpisodes, stepsPerEpisode, epsilon, annealingConstant, annealAfter, targetUpdateAfter,expandActions=False,ddqnMode=False):
         self.env_2bus = powerGrid_ieee2();
+        self.ddqnMode=ddqnMode;
         if expandActions:
             self.actions = ['v_ref:' + str(x) + ';lp_ref:' + str(y) for x in self.env_2bus.deepActionSpace['v_ref_pu']
                             for y
@@ -28,7 +29,7 @@ class DQN:
         self.learn_step_counter = 0  # for target updating
         self.memory_counter = 0  # for storing memory
         self.memory_capacity=memorySize;
-        self.memory = np.zeros((memorySize, 3 * 2 + 2))  # initialize memory
+        self.memory = np.zeros((memorySize, 3 * 2 + 3))  # initialize memory
         self.learningRate=lr
         self.optimizer = torch.optim.Adam(self.eval_net.parameters(), lr=lr)
         self.loss_func = nn.MSELoss()
@@ -70,8 +71,8 @@ class DQN:
             #if next(self.eval_net.parameters()).is_cuda:
             #    print('done')
 
-    def store_transition(self, s, a, r, s_):
-        transition = np.hstack((s, [a, r], s_))
+    def store_transition(self, s, a, r, done,s_):
+        transition = np.hstack((s, [a, r, done], s_))
         # replace the old memory with new memory
         index = self.memory_counter % self.memory_capacity
         #print(len(self.memory))
@@ -100,14 +101,32 @@ class DQN:
         b_s = Variable(torch.FloatTensor(b_memory[:, :3]).cuda())
         b_a = Variable(torch.LongTensor(b_memory[:, 3:3 + 1].astype(int)).cuda())
         b_r = Variable(torch.FloatTensor(b_memory[:, 3 + 1:3 + 2]).cuda())
+        dones=Variable(torch.FloatTensor(b_memory[:, 3 + 2:3 + 3]).cuda())
         b_s_ = Variable(torch.FloatTensor(b_memory[:, -3:]).cuda())
-        #b_s.cuda()
-        #b_a.cuda()
-        #print(b_s.is_cuda)
-        # q_eval w.r.t the action in experience
+
         q_eval = self.eval_net(b_s).gather(1, b_a)  # shape (batch, 1)
-        q_next = self.target_net(b_s_.cuda()).detach()  # detach from graph, don't backpropagate
-        q_target = b_r + self.decayRate * (q_next.max(1)[0].unsqueeze(1))  # shape (batch, 1)
+        if self.ddqnMode:
+            q_next_eval = self.eval_net(b_s_.cuda()).detach()
+            q_next_target = self.target_net(b_s_.cuda()).detach()
+        else:
+            q_next = self.target_net(b_s_.cuda()).detach()  # detach from graph, don't backpropagate
+           # q_target = b_r + self.decayRate * (q_next.max(1)[0].unsqueeze(1))  # shape (batch, 1)
+
+        target = [];
+        for i in range(0, len(self.batch_size)):
+            terminal = dones[i]
+            if terminal:
+                target.append(0)
+            else:
+                if self.ddqnMode:
+                    action = np.argmax(q_next_eval[i])
+                    target.append(q_next_target[i][action])
+                else:
+                    target.append(q_next[i].max()[0])
+        q_target = b_r + self.decayRate * target
+        q_target = np.array(q_target)
+        q_target = Variable(torch.FloatTensor(q_target).cuda())
+        print(target)
         #print(q_target.shape)
         loss = self.loss_func(q_eval, q_target)
         self.optimizer.zero_grad()
@@ -165,11 +184,11 @@ class DQN:
                     #actionIndex = self.q_table[currentState].idxmax();
                 action = self.getActionFromIndex(actionIndex);
                 #oldMeasurements = currentMeasurements;
-                currentMeasurements, reward, done = self.env_2bus.takeAction(action[0], action[1],'dqn');
+                currentMeasurements, reward, done,stateAfterAction = self.env_2bus.takeAction(action[0], action[1],'dqn');
                 oldState=currentState;
                 currentState=currentMeasurements;
                 #print(len(currentState))
-                self.store_transition(oldState, actionIndex, reward, currentState)
+                self.store_transition(oldState, actionIndex, reward, done ,currentState)
                 accumulatedReward += reward;
                 if self.memory_counter > self.memory_capacity:
                     self.learn()
