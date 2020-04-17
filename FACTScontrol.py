@@ -2,7 +2,7 @@ import pandapower.control as ct
 
 # SHUNT CONTROLLER
 class ShuntFACTS(ct.basic_controller.Controller):
-    def __init__(self, net, busVoltageInd, convLim, shuntIndex=0, q_mvar_rating=50, in_service=True,
+    def __init__(self, net, busVoltageInd, convLim, shuntIndex=0, q_mvar_rating=50, max_iter=30, in_service=True,
                  recycle=False, order=0, level=0, **kwargs):
         # construct through superclass
         super().__init__(net, in_service=in_service, recycle=recycle, order=order, level=level,
@@ -19,13 +19,15 @@ class ShuntFACTS(ct.basic_controller.Controller):
         self.q_mvar_min = -q_mvar_rating
         self.iter_counter = 0  # count number of iterations
         self.maxed_counter = 0  # To count iterations if maxed out and cant converge to v_ref
+        self.max_iter = max_iter # maximum umber of iterations
         self.v_delta = 0
         self.v_delta_accum = 0
 
     # return boolean for if controled has converged to ref value
     def is_converged(self):
+        self.meas = self.net.res_bus.vm_pu[self.busVoltageInd]
         # Converged if within limit or output maxed for three iterations without convergence
-        if abs(self.meas - self.ref) < self.convLim or self.maxed_counter >= 4:
+        if abs(self.meas - self.ref) < self.convLim or self.maxed_counter >= 4 or self.iter_counter == self.max_iter:
             self.applied = True
         return self.applied
 
@@ -72,7 +74,7 @@ class ShuntFACTS(ct.basic_controller.Controller):
 
 # Series CONTROLLER
 class SeriesFACTS(ct.basic_controller.Controller):
-    def __init__(self, net, lineLPInd, convLim, x_line_pu, switchInd=1, serIndex=0, x_comp_rating=0.4,
+    def __init__(self, net, lineLPInd, convLim, x_line_pu, max_iter=30, switchInd=1, serIndex=0, x_comp_rating=0.4,
                  in_service=True,
                  recycle=False, order=0, level=0, **kwargs):
         # construct through superclass
@@ -92,13 +94,15 @@ class SeriesFACTS(ct.basic_controller.Controller):
         self.x_comp_min = -x_comp_rating
         self.iter_counter = 0  # count number of iterations
         self.maxed_counter = 0  # To count iterations if maxed out and cant converge to v_ref
+        self.max_iter = max_iter
         self.lp_delta = 0
         self.lp_delta_accum = 0
 
     # return boolean for if controled has converged to ref value
     def is_converged(self):
+        self.meas = self.net.res_line.loading_percent[self.lineLPInd]
         # Converged if within limit or output maxed for three iterations without convergence
-        if abs(self.meas - self.ref) < self.convLim or self.maxed_counter >= 4:
+        if abs(self.meas - self.ref) < self.convLim or self.maxed_counter >= 4 or self.iter_counter == self.max_iter:
             self.applied = True
         return self.applied
 
