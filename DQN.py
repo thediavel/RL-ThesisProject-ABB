@@ -1,3 +1,5 @@
+from collections import deque
+
 from DQN_Model import ieee2_net,ieee4_net
 import torch.nn as nn
 from torch.autograd import Variable
@@ -10,10 +12,44 @@ import matplotlib.pyplot as plt
 import copy
 import statistics as stat
 from torch.utils.tensorboard import SummaryWriter
+from random import sample
+
+class BasicBuffer:
+    def __init__(self, max_size):
+        self.max_size = max_size
+        self.buffer = deque(maxlen=max_size)
+
+    def push(self, state, action, reward, next_state, done):
+        experience = [state, action, reward, next_state, done]
+        #print(experience)
+        self.buffer.append(experience)
+
+    def sample(self, batch_size):
+        state_batch = []
+        action_batch = []
+        reward_batch = []
+        next_state_batch = []
+        done_batch = []
+
+        batch =sample(self.buffer, batch_size)
+        #print(np.array(batch))
+        for experience in batch:
+            state, action, reward, next_state, done = experience
+            state_batch.append(state)
+            action_batch.append(action)
+            reward_batch.append(reward)
+            next_state_batch.append(next_state)
+            done_batch.append(done)
+        #print(batch[:,1])
+        return (state_batch, action_batch, reward_batch, next_state_batch, done_batch)
+
+    def __len__(self):
+        return len(self.buffer)
 
 class DQN:
-    def __init__(self, ieeeBusSystem, lr, memorySize, batchSize,  decayRate, numOfEpisodes, stepsPerEpisode, epsilon, annealingConstant, annealAfter, targetUpdateAfter,expandActions=False):
-        self.env_2bus = powerGrid_ieee2();
+    def __init__(self, ieeeBusSystem, lr, memorySize, batchSize,  decayRate, numOfEpisodes, stepsPerEpisode, epsilon, annealingConstant, annealAfter, targetUpdateAfter,expandActions=False,ddqnMode=False):
+        self.env_2bus = powerGrid_ieee2('ddqn' if ddqnMode else 'dqn');
+        self.ddqnMode=ddqnMode;
         if expandActions:
             self.actions = ['v_ref:' + str(x) + ';lp_ref:' + str(y) for x in self.env_2bus.deepActionSpace['v_ref_pu']
                             for y
@@ -23,12 +59,13 @@ class DQN:
                             in self.env_2bus.actionSpace['lp_ref']]
 
         op=len(self.actions)
-        self.eval_net, self.target_net = ieee2_net(3,op,0.3), ieee2_net(3,op)
+        self.eval_net, self.target_net = ieee2_net(1,op,0.3), ieee2_net(1,op)
         USE_CUDA = torch.cuda.is_available();
         self.learn_step_counter = 0  # for target updating
         self.memory_counter = 0  # for storing memory
         self.memory_capacity=memorySize;
-        self.memory = np.zeros((memorySize, 3 * 2 + 2))  # initialize memory
+        #self.memory = np.zeros((memorySize, 3 * 2 + 3))  # initialize memory
+        self.memory=BasicBuffer(self.memory_capacity);
         self.learningRate=lr
         self.optimizer = torch.optim.Adam(self.eval_net.parameters(), lr=lr)
         self.loss_func = nn.MSELoss()
@@ -70,16 +107,18 @@ class DQN:
             #if next(self.eval_net.parameters()).is_cuda:
             #    print('done')
 
-    def store_transition(self, s, a, r, s_):
-        transition = np.hstack((s, [a, r], s_))
+    def store_transition(self, s, a, r, done,s_):
+        #print((s, a, r, s_, done))
+        self.memory.push(s, a, r, s_, done)
+        #transition = np.hstack((s, [a, r, done], s_))
         # replace the old memory with new memory
-        index = self.memory_counter % self.memory_capacity
+        #index = self.memory_counter % self.memory_capacity
         #print(len(self.memory))
         #print(transition)
         # if self.memory_counter < self.memory_capacity:
         #     self.memory.append(transition)
         # else:
-        self.memory[index]=transition
+        #self.memory[index]=transition
         self.memory_counter += 1
 
     def getActionFromIndex(self, ind):
@@ -95,26 +134,56 @@ class DQN:
             self.target_net.load_state_dict(self.eval_net.state_dict())
         self.learn_step_counter += 1
         # sample batch transitions
-        sample_index = np.random.choice(self.memory_capacity, self.batch_size)
-        b_memory = self.memory[sample_index, :]
-        b_s = Variable(torch.FloatTensor(b_memory[:, :3]).cuda())
-        b_a = Variable(torch.LongTensor(b_memory[:, 3:3 + 1].astype(int)).cuda())
-        b_r = Variable(torch.FloatTensor(b_memory[:, 3 + 1:3 + 2]).cuda())
-        b_s_ = Variable(torch.FloatTensor(b_memory[:, -3:]).cuda())
-        #b_s.cuda()
-        #b_a.cuda()
-        #print(b_s.is_cuda)
-        # q_eval w.r.t the action in experience
-        q_eval = self.eval_net(b_s).gather(1, b_a)  # shape (batch, 1)
-        q_next = self.target_net(b_s_.cuda()).detach()  # detach from graph, don't backpropagate
-        q_target = b_r + self.decayRate * (q_next.max(1)[0].unsqueeze(1))  # shape (batch, 1)
+        #sample_index = np.random.choice(self.memory_capacity, self.batch_size)
+        b_s,b_a,b_r,b_s_,dones = self.memory.sample(self.batch_size)
+        #print(b_a)
+        #b_s.astype(float)
+        b_s=Variable(torch.FloatTensor(b_s).cuda())
+        b_a = Variable(torch.LongTensor(b_a).cuda())
+        #b_r = b_memory[2]
+        b_s_ = Variable(torch.FloatTensor(b_s_).cuda())
+        #dones = b_memory[4]
+
+        # b_s = Variable(torch.FloatTensor(b_memory[:, :3]).cuda())
+        # b_a = Variable(torch.LongTensor(b_memory[:, 3:3 + 1].astype(int)).cuda())
+        # b_r = b_memory[:, 3 + 1:3 + 2]
+        # dones=Variable(torch.FloatTensor(b_memory[:, 3 + 2:3 + 3]).cuda())
+        # b_s_ = Variable(torch.FloatTensor(b_memory[:, -3:]).cuda())
+        #print(b_a.shape)
+        q_eval = self.eval_net(b_s.unsqueeze(1)).gather(1, b_a.unsqueeze(1))  # shape (batch, 1)
+        if self.ddqnMode:
+            q_next_eval = self.eval_net(b_s_.unsqueeze(1)).detach()
+            q_next_target = self.target_net(b_s_.unsqueeze(1)).detach()
+        else:
+            q_next = self.target_net(b_s_.unsqueeze(1)).detach()  # detach from graph, don't backpropagate
+           # q_target = b_r + self.decayRate * (q_next.max(1)[0].unsqueeze(1))  # shape (batch, 1)
+
+        target = [];
+        for i in range(0, self.batch_size):
+            terminal = dones[i]
+            if terminal:
+                target.append(0)
+            else:
+                if self.ddqnMode:
+                    action = np.argmax(q_next_eval[i])
+                    target.append(self.decayRate*q_next_target[i][action].item())
+                else:
+                    #print(q_next[i])
+                    #print(q_next[i].max(0)[0].item())
+                    target.append(self.decayRate*q_next[i].max(0)[0].item())
+        q_target = np.add(b_r , target)
+        #q_target = np.array(q_target)
+        q_target = Variable(torch.FloatTensor(q_target).cuda())
         #print(q_target.shape)
-        loss = self.loss_func(q_eval, q_target)
+        #print(q_target.shape)
+        #print(q_eval.shape)
+        loss = self.loss_func(q_eval, q_target.unsqueeze(1))
         self.optimizer.zero_grad()
         loss.backward()
         self.optimizer.step()
+        print(loss.item())
         self.runningLoss+=loss.item()
-        self.runningRewards+=sum(b_memory[:, 3 + 1:3 + 2])/self.batch_size
+        self.runningRewards+=sum(b_r)/self.batch_size
 
         if self.learn_step_counter % 1000 == 0:  # every 1000 mini-batches...
 
@@ -149,9 +218,22 @@ class DQN:
         for i in range(0, noe):
             accumulatedReward = 0;
             self.env_2bus.reset();
-            currentState=self.env_2bus.getCurrentStateForDQN();
-            #print(len(currentState));
+            currentState = [];
+            for j in range(0, 3):
+                m = self.env_2bus.getCurrentStateForDQN();
+                m.extend(m)
+                currentState.append(m);
+                self.env_2bus.stateIndex += 1;
+                self.env_2bus.scaleLoadAndPowerValue(self.env_2bus.stateIndex)
+                self.env_2bus.runEnv(False);
+
+            currentState.append(self.env_2bus.getCurrentStateForDQN())
+            currentState[3].extend(self.env_2bus.getCurrentStateForDQN())
+            currentState=np.array(currentState)
+            #currentState=self.env_2bus.getCurrentStateForDQN();
+            #print(currentState);
             for j in range(0, self.numOfSteps):
+                #print(j)
                 epsComp = np.random.random();
                 #currentState = self.getStateFromMeasurements_2([oldMeasurements, currentMeasurements]);
                 if epsComp <= self.epsilon:
@@ -159,17 +241,23 @@ class DQN:
                     actionIndex = np.random.choice(99, 1)[0]
                 else:
                     # Greedy Approach
-                    q_value = self.eval_net.forward(Variable(torch.unsqueeze(torch.FloatTensor(currentState),0)).cuda());
+                    q_value = self.eval_net.forward(Variable(torch.unsqueeze(torch.unsqueeze(torch.FloatTensor(currentState),0),0)).cuda());
                     #print(torch.max(q_value, 1)[1].shape)
                     actionIndex = torch.max(q_value, 1)[1].data.cpu().numpy()[0]  # return the argmax
                     #actionIndex = self.q_table[currentState].idxmax();
                 action = self.getActionFromIndex(actionIndex);
                 #oldMeasurements = currentMeasurements;
-                currentMeasurements, reward, done = self.env_2bus.takeAction(action[0], action[1],'dqn');
+                currentMeasurements, reward, done = self.env_2bus.takeAction(action[0], action[1]);
                 oldState=currentState;
-                currentState=currentMeasurements;
-                #print(len(currentState))
-                self.store_transition(oldState, actionIndex, reward, currentState)
+                #currentMeasurements=np.array(currentMeasurements);
+                #print(currentMeasurements)
+                #np.append(currentState,currentMeasurements,0)
+                currentState=np.append(currentState, [currentMeasurements],axis=0)
+                #currentState.append(currentMeasurements);
+                currentState=np.delete(currentState,0,axis=0);
+                #currentState=currentMeasurements;
+                #print(currentState)
+                self.store_transition(oldState, actionIndex, reward, done ,currentState)
                 accumulatedReward += reward;
                 if self.memory_counter > self.memory_capacity:
                     self.learn()

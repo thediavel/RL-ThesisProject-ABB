@@ -6,6 +6,7 @@ import enlopy as el
 import numpy as np
 import pandas as pd
 import pickle
+import copy
 import math
 import matplotlib.mlab as mlab
 import matplotlib.pyplot as plt
@@ -143,7 +144,7 @@ class powerGrid_ieee4:
                 reward = self.calculateReward(self.net.res_bus.vm_pu, self.net.res_line.loading_percent);
             except:
                 print('Unstable environment settings');
-                networkFailure = True
+                networkFailure = True;
                 reward = -1000;
 
         return (self.net.res_bus.vm_pu[bus_index_shunt], self.net.res_line.loading_percent[line_index]), reward, self.stateIndex == len(self.powerProfile) or networkFailure;
@@ -285,8 +286,15 @@ class powerGrid_ieee4:
 
 
 class powerGrid_ieee2:
-    def __init__(self):
+    def __init__(self,method):
         #print('in init. Here we lay down the grid structure and load some random state values based on IEEE dataset');
+        self.method=method;
+        if self.method in ('dqn','ddqn'):
+            self.errorState=[-2, -1000, -90];
+            self.numberOfTimeStepsPerState=3
+        else:
+            self.errorState=[-2,-1000];
+            self.numberOfTimeStepsPerState=1
         with open('Data/JanLoadEvery5mins.pkl', 'rb') as pickle_file:
             self.loadProfile = pickle.load(pickle_file)
         with open('Data/generatorValuesEvery5mins.pkl', 'rb') as pickle_file:
@@ -455,8 +463,6 @@ class powerGrid_ieee2:
 
         self.nominalP=self.net.load.p_mw[0]
         self.nominalQ=self.net.load.q_mvar[0]
-        #plt.plot(self.loadProfile)
-        #plt.show()
 
 
 
@@ -474,15 +480,15 @@ class powerGrid_ieee2:
             pp.runpp(self.net, run_control=False);
             print('Environment has been successfully initialized');
             # Create SHUNT controllers
-            self.shuntControl = ShuntFACTS(net=self.net, busVoltageInd=1, convLim=0.0005, q_mvar_rating=50)
+            self.shuntControl = ShuntFACTS(net=self.net, busVoltageInd=1, convLim=0.0005)
             self.seriesControl = SeriesFACTS(net=self.net, lineLPInd=1, convLim=0.0005, x_line_pu=self.X_pu(1))
         except:
             print('Some error occurred while creating environment');
             raise Exception('cannot proceed at these settings. Please fix the environment settings');
 
     def getstartingIndex(self):
-        index = np.random.randint(len(self.source), size = 1)[0];
-        if self.source[index] < len(self.loadProfile):
+        index = np.random.randint(len(self.source), size=1)[0];
+        if self.source[index] + self.numberOfTimeStepsPerState < len(self.loadProfile):
             return self.source[index];
         else:
             return self.getstartingIndex()
@@ -500,7 +506,7 @@ class powerGrid_ieee2:
     def getCurrentState(self):
         bus_index_shunt = 1
         line_index = 1;
-        return (self.net.res_bus.vm_pu[bus_index_shunt], self.net.res_line.loading_percent[line_index]);
+        return [self.net.res_bus.vm_pu[bus_index_shunt], self.net.res_line.loading_percent[line_index]];
 
     def getCurrentStateForDQN(self):
         bus_index_shunt = 1
@@ -513,43 +519,59 @@ class powerGrid_ieee2:
 
     ## Take epsilon-greedy action
     ## Return next state measurements, reward, done (boolean)
-    def takeAction(self, lp_ref, v_ref_pu,source=''):
-        # Make sure FACTS devices are enabled:
+    def takeAction(self, lp_ref, v_ref_pu):
+        #print('taking action')
+        stateAfterAction = copy.deepcopy(self.errorState);
+        stateAfterEnvChange = copy.deepcopy(self.errorState);
         self.net.switch.at[0, 'closed'] = True
         self.net.switch.at[1, 'closed'] = False
         if lp_ref != 'na' and v_ref_pu != 'na':
             self.shuntControl.ref=v_ref_pu;
             self.seriesControl.ref=lp_ref;
         networkFailure = False
+        done=False;
         bus_index_shunt=1;
         line_index=1;
         if self.stateIndex < min(len(self.powerProfile),len(self.loadProfile)):
             try:
                 dummyRes=(self.net.res_bus.vm_pu,self.net.res_line.loading_percent)
+                ## state = (voltage,ll,angle,p,q)
                 pp.runpp(self.net, run_control=True);
-                if source == 'dqn':
-                    reward = self.calculateReward(self.net.res_bus.vm_pu, self.net.res_line.loading_percent,self.net.res_bus.va_degree[bus_index_shunt]);
+                if self.method in ('dqn','ddqn'):
+                    reward1 = self.calculateReward(self.net.res_bus.vm_pu, self.net.res_line.loading_percent,self.net.res_bus.va_degree[bus_index_shunt]);
+                    stateAfterAction = self.getCurrentStateForDQN()
                 else:
-                    reward = self.calculateReward(self.net.res_bus.vm_pu, self.net.res_line.loading_percent);
+                    reward1 = self.calculateReward(self.net.res_bus.vm_pu, self.net.res_line.loading_percent);
+                    stateAfterAction = self.getCurrentState()
                 done = self.stateIndex == (len(self.powerProfile)-1)
-                if done==False:
+                if done == False:
                     self.incrementLoadProfile()
+                    if self.method in ('dqn','ddqn'):
+                        reward2 = self.calculateReward(self.net.res_bus.vm_pu, self.net.res_line.loading_percent,
+                                                       self.net.res_bus.va_degree[bus_index_shunt]);
+                        stateAfterEnvChange = self.getCurrentStateForDQN()
+                    else:
+                        reward2 = self.calculateReward(self.net.res_bus.vm_pu, self.net.res_line.loading_percent);
+                        stateAfterEnvChange = self.getCurrentState()
+                reward=0.7*reward1 + 0.3*reward2;
+                #print(reward)
             except:
                 print('Unstable environment settings');
-                print(lp_ref,v_ref_pu)
-                print(dummyRes)
-                print(self.net.load.p_mw[0],self.net.load.q_mvar[0]);
+                #print(stateAfterEnvChange)
+                #print(stateAfterAction)
+                #print(lp_ref,v_ref_pu)
+                #print(dummyRes)
+                #print(self.net.load.p_mw[0],self.net.load.q_mvar[0]);
                 networkFailure = True;
                 reward = -10000;
-                return (-2, -1000,-90), reward, networkFailure;
+                #return stateAfterAction, reward, networkFailure,stateAfterEnvChange ;
         else:
             print('wrong block!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
+        stateAfterEnvChange.extend(stateAfterAction)
+        #print(self.errorState)
 
-        if source=='dqn':
-            s=self.getCurrentStateForDQN()
-        elif source=='qlearning':
-            s = (self.net.res_bus.vm_pu[bus_index_shunt], self.net.res_line.loading_percent[line_index])
-        return s, reward, done ;
+        #print(reward2)
+        return stateAfterEnvChange, reward, done or networkFailure;
 
     def incrementLoadProfile(self):
         self.stateIndex += 1;
@@ -758,6 +780,7 @@ def createLoadProfile():
     print(len(JanLoadEvery5mins))
     pickle.dump(generatorValuesEvery5mins, open("Data/generatorValuesEvery5mins.pkl", "wb"))
     pickle.dump(JanLoadEvery5mins, open("Data/JanLoadEvery5mins.pkl", "wb"))
+
 
 
 def trainTestSplit():
