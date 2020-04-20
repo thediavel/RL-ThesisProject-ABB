@@ -19,7 +19,7 @@ class qLearning:
         self.states=['s1:' + x + ';s2:' + y +';' for x in self.statesLev1 for y in self.statesLev1]
 
         # initialise environment
-        self.env_2bus=powerGrid_ieee2(1);
+        self.env_2bus=powerGrid_ieee2('qlearning');
 
         # Possible actions to take, combinations of v_ref into cobinations of lp_ref
         self.actions=['v_ref:'+str(x)+';lp_ref:'+str(y) for x in self.env_2bus.actionSpace['v_ref_pu'] for y in self.env_2bus.actionSpace['lp_ref']]
@@ -142,6 +142,7 @@ class qLearning:
             rewards = [];
             compensation = []
             measurements = []
+            self.env_2bus.setMode('test')
             # Try all actions and store rewards in array
             for i in range(0, len(self.actions)):
                 copyNetwork=copy.deepcopy(self.env_2bus);

@@ -23,18 +23,28 @@ class ieee4_net(nn.Module):
         return self.fc5(x)
 
 class ieee2_net(nn.Module):
-    def __init__(self, inputs, num_actions,p=0.5):
+    def __init__(self, inputChannels, num_actions,p=0.5):
         super(ieee2_net, self).__init__()
-        self.fc1 = nn.Linear(inputs, 6);
-        self.fc2 = nn.Linear(6, 18);
-        self.fc3 = nn.Linear(18, 54);
-        self.fc4 = nn.Linear(54, num_actions)
+        self.conv1 = nn.Conv2d(inputChannels, 8, kernel_size=3, stride=1, padding=1)
+        self.conv2 = nn.Conv2d(8, 16, kernel_size=2, stride=2)
+        self.fc1 = nn.Linear(16*3*2, 16*3*2*2);
+        self.fc2 = nn.Linear(16*3*2*2, num_actions);
+        #self.fc3 = nn.Linear(18, 54);
+        #self.fc4 = nn.Linear(54, num_actions)
         self.drop_layer = nn.Dropout(p=p)
 
     def forward(self, x):
-        x = F.relu(self.fc1(x));
-        x = F.relu(self.fc2(x));
-        x=self.drop_layer(x);
-        x = F.relu(self.fc3(x));
-        return self.fc4(x);
+        x = F.relu(self.conv1(x))
+        x = F.relu(self.conv2(x))
+        x = self.drop_layer(x);
+        x = F.relu(self.fc1(x.view(x.size(0), -1)))
+        x = self.drop_layer(x);
+        x=F.relu(self.fc2(x))
+        return x
+
+        # x = F.relu(self.fc1(x));
+        # x = F.relu(self.fc2(x));
+        # x=self.drop_layer(x);
+        # x = F.relu(self.fc3(x));
+        # return self.fc4(x);
 
