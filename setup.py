@@ -561,7 +561,7 @@ class powerGrid_ieee2:
                 #print(dummyRes)
                 #print(self.net.load.p_mw[0],self.net.load.q_mvar[0]);
                 networkFailure = True;
-                reward = -10000;
+                reward = 0;
                 #return stateAfterAction, reward, networkFailure,stateAfterEnvChange ;
         else:
             print('wrong block!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
@@ -637,7 +637,7 @@ class powerGrid_ieee2:
             print(voltages);
             print(loadingPercent)
             return 0;
-        return rew
+        return 5000+rew
 
     ## Simple plot diagram
     def plotGridFlow(self):

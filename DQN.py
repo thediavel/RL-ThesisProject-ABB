@@ -176,7 +176,7 @@ class DQN:
         q_target = Variable(torch.FloatTensor(q_target).cuda())
         #print(q_target.shape)
         #print(q_target.shape)
-        #print(q_eval.shape)
+        print(q_eval)
         loss = self.loss_func(q_eval, q_target.unsqueeze(1))
         self.optimizer.zero_grad()
         loss.backward()
@@ -290,12 +290,6 @@ class DQN:
         self.eval_net.eval();
         self.env_2bus.setMode('test')
         copyNetwork = copy.deepcopy(self)
-        #self.writer = SummaryWriter(
-        #    'runs/dqn_lr' + str(self.learningRate) + 'tua' + str(self.target_update_iter) + 'bs' + str(
-        #        self.batch_size) + 'ms' + str(
-        #        self.memory_capacity) + 'dr' + str(self.decayRate) + 'noe' + str(
-        #        self.numOfEpisodes) + 'spe' + str(self.numOfSteps) + 'e' + str(self.epsilon) + 'ac' + str(
-        #        self.annealingRate) + 'aa' + str(self.annealAfter))
 
         for j in range(0,episodes):
             self.env_2bus.reset();
