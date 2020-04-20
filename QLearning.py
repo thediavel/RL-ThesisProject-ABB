@@ -186,6 +186,7 @@ class qLearning:
         rewards = [[]];
         for j in range(0, episodes):
             self.env_2bus.reset();
+            self.env_2bus.setMode('test')
             for i in models:
                 oldIndex=i.env_2bus.stateIndex;
                 i.env_2bus.stateIndex=self.env_2bus.stateIndex;
