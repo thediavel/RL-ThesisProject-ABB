@@ -165,7 +165,8 @@ class DQN:
                 target.append(0)
             else:
                 if self.ddqnMode:
-                    action = np.argmax(q_next_eval[i])
+                    values, action = q_next_eval[i].max(0)
+                    #action = np.argmax(q_next_eval[i].)
                     target.append(self.decayRate*q_next_target[i][action].item())
                 else:
                     #print(q_next[i])
