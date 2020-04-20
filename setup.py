@@ -47,8 +47,8 @@ class powerGrid_ieee4:
                                                          tap_max=9,
                                                          tap_step_percent=1.5, tap_step_degree=0,
                                                          tap_phase_shifter=False)
-
-        trafo_control = ct.DiscreteTapControl(net=self.net, tid=0, vm_lower_pu=0.95, vm_upper_pu=1.05)
+        # Tap changer usually not used on this trafo in real life implementation
+        #trafo_control = ct.DiscreteTapControl(net=self.net, tid=0, vm_lower_pu=0.95, vm_upper_pu=1.05)
 
         # Breaker between grid HV bus and trafo HV bus to connect buses
         sw_SVC = pp.create_switch(self.net, bus=1, element=0, et='t', type='CB', closed=False)
@@ -429,7 +429,9 @@ class powerGrid_ieee2:
                                                          tap_max=9,
                                                          tap_step_percent=1.5, tap_step_degree=0,
                                                          tap_phase_shifter=False)
-        trafo_control = ct.DiscreteTapControl(net=self.net, tid=0, vm_lower_pu=0.95, vm_upper_pu=1.05)
+        # TAP Changer on shunt device usually not used in Real life implementation.
+        #trafo_control = ct.DiscreteTapControl(net=self.net, tid=0, vm_lower_pu=0.95, vm_upper_pu=1.05)
+
         # Breaker between grid HV bus and trafo HV bus to connect buses
         sw_SVC = pp.create_switch(self.net, bus=1, element=0, et='t', type='CB', closed=False)
         # Shunt devices connected with MV bus
@@ -497,7 +499,7 @@ class powerGrid_ieee2:
             pp.runpp(self.net, run_control=runControl);
             #print('Environment has been successfully initialized');
         except:
-            print('Some error occurred while creating environment');
+            print('Some error occurred while running environment');
             raise Exception('cannot proceed at these settings. Please fix the environment settings');
 
     ## Retreieve voltage and line loading percent as measurements of current state
@@ -654,6 +656,45 @@ class powerGrid_ieee2:
         self.net.load.q_mvar[0] = self.nominalQ * scalingFactorLoad;
         #self.net.sgen.p_mw = self.net.sgen.p_mw * scalingFactorPower;
         #self.net.sgen.q_mvar = self.net.sgen.q_mvar * scalingFactorPower;
+
+    def runNoFACTS(self, busVoltageInd):
+        #Start from 0 when inside foor loop
+        self.stateIndex = -1
+
+        # Bypass FACTS devices
+        self.net.switch.at[0, 'closed'] = False
+        self.net.switch.at[1, 'closed'] = True
+        #self.shuntControl.ref = 1
+        #self.seriesControl.ref = 50
+
+        # Create arrays
+        v_arr = []
+        lp0_arr = []
+        lp1_arr = []
+        lp2_arr = []
+
+        # Loop through all loadings
+        for i in range(0, len(self.loadProfile)):
+            # Increment and run environment
+            self.stateIndex += 1;
+            self.scaleLoadAndPowerValue(self.stateIndex);
+            self.runEnv(False);
+
+            # Store result for current settings
+            v_arr.append(self.net.res_bus.vm_pu[busVoltageInd])
+            #lp0_arr.append(self.net.res_line.loading_percent[0])
+            #lp1_arr.append(self.net.res_line.loading_percent[1])
+            #lp2_arr.append(self.net.res_line.loading_percent[2])
+
+        # Plot result
+        print(max(v_arr))
+        print(min(v_arr))
+        plt.plot(v_arr)
+        plt.show()
+
+
+
+
 
 
     # ## Transition from reference line loading to reactance of series comp
