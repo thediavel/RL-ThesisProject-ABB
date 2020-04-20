@@ -46,8 +46,8 @@ class powerGrid_ieee4:
                                                          tap_max=9,
                                                          tap_step_percent=1.5, tap_step_degree=0,
                                                          tap_phase_shifter=False)
-
-        trafo_control = ct.DiscreteTapControl(net=self.net, tid=0, vm_lower_pu=0.95, vm_upper_pu=1.05)
+        # Tap changer usually not used on this trafo in real life implementation
+        #trafo_control = ct.DiscreteTapControl(net=self.net, tid=0, vm_lower_pu=0.95, vm_upper_pu=1.05)
 
         # Breaker between grid HV bus and trafo HV bus to connect buses
         sw_SVC = pp.create_switch(self.net, bus=1, element=0, et='t', type='CB', closed=False)
@@ -143,7 +143,7 @@ class powerGrid_ieee4:
                 reward = self.calculateReward(self.net.res_bus.vm_pu, self.net.res_line.loading_percent);
             except:
                 print('Unstable environment settings');
-                networkFailure = True;
+                networkFailure = True
                 reward = -1000;
 
         return (self.net.res_bus.vm_pu[bus_index_shunt], self.net.res_line.loading_percent[line_index]), reward, self.stateIndex == len(self.powerProfile) or networkFailure;
@@ -421,7 +421,9 @@ class powerGrid_ieee2:
                                                          tap_max=9,
                                                          tap_step_percent=1.5, tap_step_degree=0,
                                                          tap_phase_shifter=False)
-        trafo_control = ct.DiscreteTapControl(net=self.net, tid=0, vm_lower_pu=0.95, vm_upper_pu=1.05)
+        # TAP Changer on shunt device usually not used in Real life implementation.
+        #trafo_control = ct.DiscreteTapControl(net=self.net, tid=0, vm_lower_pu=0.95, vm_upper_pu=1.05)
+
         # Breaker between grid HV bus and trafo HV bus to connect buses
         sw_SVC = pp.create_switch(self.net, bus=1, element=0, et='t', type='CB', closed=False)
         # Shunt devices connected with MV bus
@@ -453,6 +455,8 @@ class powerGrid_ieee2:
 
         self.nominalP=self.net.load.p_mw[0]
         self.nominalQ=self.net.load.q_mvar[0]
+        #plt.plot(self.loadProfile)
+        #plt.show()
 
 
 
@@ -470,7 +474,7 @@ class powerGrid_ieee2:
             pp.runpp(self.net, run_control=False);
             print('Environment has been successfully initialized');
             # Create SHUNT controllers
-            self.shuntControl = ShuntFACTS(net=self.net, busVoltageInd=1, convLim=0.0005)
+            self.shuntControl = ShuntFACTS(net=self.net, busVoltageInd=1, convLim=0.0005, q_mvar_rating=50)
             self.seriesControl = SeriesFACTS(net=self.net, lineLPInd=1, convLim=0.0005, x_line_pu=self.X_pu(1))
         except:
             print('Some error occurred while creating environment');
@@ -489,7 +493,7 @@ class powerGrid_ieee2:
             pp.runpp(self.net, run_control=runControl);
             #print('Environment has been successfully initialized');
         except:
-            print('Some error occurred while creating environment');
+            print('Some error occurred while running environment');
             raise Exception('cannot proceed at these settings. Please fix the environment settings');
 
     ## Retreieve voltage and line loading percent as measurements of current state
@@ -510,6 +514,7 @@ class powerGrid_ieee2:
     ## Take epsilon-greedy action
     ## Return next state measurements, reward, done (boolean)
     def takeAction(self, lp_ref, v_ref_pu,source=''):
+        # Make sure FACTS devices are enabled:
         self.net.switch.at[0, 'closed'] = True
         self.net.switch.at[1, 'closed'] = False
         if lp_ref != 'na' and v_ref_pu != 'na':
@@ -630,6 +635,45 @@ class powerGrid_ieee2:
         #self.net.sgen.p_mw = self.net.sgen.p_mw * scalingFactorPower;
         #self.net.sgen.q_mvar = self.net.sgen.q_mvar * scalingFactorPower;
 
+    def runNoFACTS(self, busVoltageInd):
+        #Start from 0 when inside foor loop
+        self.stateIndex = -1
+
+        # Bypass FACTS devices
+        self.net.switch.at[0, 'closed'] = False
+        self.net.switch.at[1, 'closed'] = True
+        #self.shuntControl.ref = 1
+        #self.seriesControl.ref = 50
+
+        # Create arrays
+        v_arr = []
+        lp0_arr = []
+        lp1_arr = []
+        lp2_arr = []
+
+        # Loop through all loadings
+        for i in range(0, len(self.loadProfile)):
+            # Increment and run environment
+            self.stateIndex += 1;
+            self.scaleLoadAndPowerValue(self.stateIndex);
+            self.runEnv(False);
+
+            # Store result for current settings
+            v_arr.append(self.net.res_bus.vm_pu[busVoltageInd])
+            #lp0_arr.append(self.net.res_line.loading_percent[0])
+            #lp1_arr.append(self.net.res_line.loading_percent[1])
+            #lp2_arr.append(self.net.res_line.loading_percent[2])
+
+        # Plot result
+        print(max(v_arr))
+        print(min(v_arr))
+        plt.plot(v_arr)
+        plt.show()
+
+
+
+
+
 
     # ## Transition from reference line loading to reactance of series comp
     # def K_x_comp_pu(self, loading_perc_ref, line_index, k_old):
@@ -714,7 +758,6 @@ def createLoadProfile():
     print(len(JanLoadEvery5mins))
     pickle.dump(generatorValuesEvery5mins, open("Data/generatorValuesEvery5mins.pkl", "wb"))
     pickle.dump(JanLoadEvery5mins, open("Data/JanLoadEvery5mins.pkl", "wb"))
-
 
 
 def trainTestSplit():
