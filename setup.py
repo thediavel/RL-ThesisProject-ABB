@@ -634,12 +634,13 @@ class powerGrid_ieee2:
             loadingPercentInstability=np.std(loadingPercent) * len(loadingPercent);
             rew = rew - loadingPercentInstability;
             rew=rew if abs(loadAngle)<30 else rew-200;
+            #print(rew)
         except:
             print('exception in calculate reward')
             print(voltages);
             print(loadingPercent)
             return 0;
-        return 5000+rew
+        return 500+rew
 
     ## Simple plot diagram
     def plotGridFlow(self):

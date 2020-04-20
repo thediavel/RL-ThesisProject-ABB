@@ -20,7 +20,7 @@ class BasicBuffer:
         self.buffer = deque(maxlen=max_size)
 
     def push(self, state, action, reward, next_state, done):
-        experience = [state, action, reward, next_state, done]
+        experience = [state.flatten() , action, reward, next_state.flatten() , done]
         #print(experience)
         self.buffer.append(experience)
 
@@ -59,7 +59,7 @@ class DQN:
                             in self.env_2bus.actionSpace['lp_ref']]
 
         op=len(self.actions)
-        self.eval_net, self.target_net = ieee2_net(1,op,0.3), ieee2_net(1,op)
+        self.eval_net, self.target_net = ieee2_net(24,op,0.3), ieee2_net(24,op)
         USE_CUDA = torch.cuda.is_available();
         self.learn_step_counter = 0  # for target updating
         self.memory_counter = 0  # for storing memory
@@ -176,24 +176,25 @@ class DQN:
         q_target = Variable(torch.FloatTensor(q_target).cuda())
         #print(q_target.shape)
         #print(q_target.shape)
-        print(q_eval)
+        #print(q_eval)
+        #print(q_target)
         loss = self.loss_func(q_eval, q_target.unsqueeze(1))
         self.optimizer.zero_grad()
         loss.backward()
         self.optimizer.step()
-        print(loss.item())
+        #print(loss.item())
         self.runningLoss+=loss.item()
         self.runningRewards+=sum(b_r)/self.batch_size
 
-        if self.learn_step_counter % 1000 == 0:  # every 1000 mini-batches...
+        if self.learn_step_counter % 200 == 0:  # every 200 mini-batches...
 
             # ...log the running loss
             self.writer.add_scalar('training loss',
-                              self.runningLoss / 1000,
+                              self.runningLoss / 200,
                               self.learn_step_counter)
 
             self.writer.add_scalar('avg Reward',
-                                   self.runningRewards/1000,
+                                   self.runningRewards/200,
                                    self.learn_step_counter)
             self.runningRewards = 0;
 
