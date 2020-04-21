@@ -59,6 +59,7 @@ class DQN:
                             in self.env_2bus.actionSpace['lp_ref']]
 
         op=len(self.actions)
+
         self.eval_net, self.target_net = ieee2_net(24,op,0.3), ieee2_net(24,op)
         USE_CUDA = torch.cuda.is_available();
         self.learn_step_counter = 0  # for target updating
@@ -239,7 +240,7 @@ class DQN:
                 #currentState = self.getStateFromMeasurements_2([oldMeasurements, currentMeasurements]);
                 if epsComp <= self.epsilon:
                     # Exploration Part
-                    actionIndex = np.random.choice(99, 1)[0]
+                    actionIndex = np.random.choice(len(self.actions), 1)[0]
                 else:
                     # Greedy Approach
                     q_value = self.eval_net.forward(Variable(torch.unsqueeze(torch.unsqueeze(torch.FloatTensor(currentState),0),0)).cuda());

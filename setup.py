@@ -482,6 +482,7 @@ class powerGrid_ieee2:
             # Create SHUNT controllers
             self.shuntControl = ShuntFACTS(net=self.net, busVoltageInd=1, convLim=0.0005)
             self.seriesControl = SeriesFACTS(net=self.net, lineLPInd=1, convLim=0.0005, x_line_pu=self.X_pu(1))
+
         except:
             print('Some error occurred while creating environment');
             raise Exception('cannot proceed at these settings. Please fix the environment settings');
@@ -544,7 +545,13 @@ class powerGrid_ieee2:
                     reward1 = self.calculateReward(self.net.res_bus.vm_pu, self.net.res_line.loading_percent);
                     stateAfterAction = self.getCurrentState()
                 done = self.stateIndex == (len(self.powerProfile)-1)
-                if done == False:
+            except:
+                print('Unstable environment settings after action')
+                networkFailure = True
+                done = True
+                reward1 = 0
+            if done == False:
+                try:
                     self.incrementLoadProfile()
                     if self.method in ('dqn','ddqn'):
                         reward2 = self.calculateReward(self.net.res_bus.vm_pu, self.net.res_line.loading_percent,
@@ -553,18 +560,24 @@ class powerGrid_ieee2:
                     else:
                         reward2 = self.calculateReward(self.net.res_bus.vm_pu, self.net.res_line.loading_percent);
                         stateAfterEnvChange = self.getCurrentState()
-                reward=0.7*reward1 + 0.3*reward2;
+                except:
+                    print('Unstable environment settings after env change')
+                    networkFailure = True
+                    reward2 = 0
+            else: #if done after action, there is no env change
+                reward2 = 0
+            reward=0.7*reward1 + 0.3*reward2;
                 #print(reward)
-            except:
-                print('Unstable environment settings');
-                #print(stateAfterEnvChange)
-                #print(stateAfterAction)
-                #print(lp_ref,v_ref_pu)
-                #print(dummyRes)
-                #print(self.net.load.p_mw[0],self.net.load.q_mvar[0]);
-                networkFailure = True;
-                reward = 0;
-                #return stateAfterAction, reward, networkFailure,stateAfterEnvChange ;
+            # except:
+            #     print('Unstable environment settings');
+            #     #print(stateAfterEnvChange)
+            #     #print(stateAfterAction)
+            #     #print(lp_ref,v_ref_pu)
+            #     #print(dummyRes)
+            #     #print(self.net.load.p_mw[0],self.net.load.q_mvar[0]);
+            #     networkFailure = True;
+            #     reward = 0;
+            #     #return stateAfterAction, reward, networkFailure,stateAfterEnvChange ;
         else:
             print('wrong block!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
         stateAfterEnvChange.extend(stateAfterAction)
@@ -659,33 +672,27 @@ class powerGrid_ieee2:
         #self.net.sgen.q_mvar = self.net.sgen.q_mvar * scalingFactorPower;
 
     def runNoFACTS(self, busVoltageInd):
-        #Start from 0 when inside foor loop
+        #Start from 0 when inside for loop
         self.stateIndex = -1
 
         # Bypass FACTS devices
-        self.net.switch.at[0, 'closed'] = False
-        self.net.switch.at[1, 'closed'] = True
-        #self.shuntControl.ref = 1
-        #self.seriesControl.ref = 50
+        self.net.switch.at[0, 'closed'] = True
+        self.net.switch.at[1, 'closed'] = False
+        self.shuntControl.ref = 1
+        self.seriesControl.ref = 50
 
-        # Create arrays
+        # Create array
         v_arr = []
-        lp0_arr = []
-        lp1_arr = []
-        lp2_arr = []
 
         # Loop through all loadings
         for i in range(0, len(self.loadProfile)):
             # Increment and run environment
             self.stateIndex += 1;
             self.scaleLoadAndPowerValue(self.stateIndex);
-            self.runEnv(False);
+            self.runEnv(True);
 
             # Store result for current settings
             v_arr.append(self.net.res_bus.vm_pu[busVoltageInd])
-            #lp0_arr.append(self.net.res_line.loading_percent[0])
-            #lp1_arr.append(self.net.res_line.loading_percent[1])
-            #lp2_arr.append(self.net.res_line.loading_percent[2])
 
         # Plot result
         print(max(v_arr))

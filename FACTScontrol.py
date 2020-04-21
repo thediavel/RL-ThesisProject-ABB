@@ -75,8 +75,7 @@ class ShuntFACTS(ct.basic_controller.Controller):
 # Series CONTROLLER
 class SeriesFACTS(ct.basic_controller.Controller):
     def __init__(self, net, lineLPInd, convLim, x_line_pu, max_iter=30, switchInd=1, serIndex=0, x_comp_rating=0.4,
-                 in_service=True,
-                 recycle=False, order=0, level=0, **kwargs):
+                 in_service=True, recycle=False, order=0, level=0, **kwargs):
         # construct through superclass
         super().__init__(net, in_service=in_service, recycle=recycle, order=order, level=level,
                          initial_powerflow=True, **kwargs)
@@ -108,8 +107,8 @@ class SeriesFACTS(ct.basic_controller.Controller):
 
     # In case the controller is not yet converged, the control step is executed.
     def control_step(self):
-        # Make sure it is enabled
-        self.net.switch.closed[self.switchInd] = True
+        # Make sure it is enabled, set to False
+        self.net.switch.closed[self.switchInd] = False
 
         # Measurement
         self.meas = self.net.res_line.loading_percent[self.lineLPInd]
