@@ -506,7 +506,7 @@ class powerGrid_ieee2:
     def getCurrentState(self):
         bus_index_shunt = 1
         line_index = 1;
-        return [self.net.res_bus.vm_pu[bus_index_shunt], self.net.res_line.loading_percent[line_index]/150];
+        return [self.net.res_bus.vm_pu[bus_index_shunt], self.net.res_line.loading_percent[line_index]];
 
     def getCurrentStateForDQN(self):
         bus_index_shunt = 1
