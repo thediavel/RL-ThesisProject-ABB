@@ -521,69 +521,58 @@ class powerGrid_ieee2:
     ## Take epsilon-greedy action
     ## Return next state measurements, reward, done (boolean)
     def takeAction(self, lp_ref, v_ref_pu):
-        #print('taking action')
+        # print('taking action')
         stateAfterAction = copy.deepcopy(self.errorState);
         stateAfterEnvChange = copy.deepcopy(self.errorState);
         self.net.switch.at[0, 'closed'] = True
         self.net.switch.at[1, 'closed'] = False
         if lp_ref != 'na' and v_ref_pu != 'na':
-            self.shuntControl.ref=v_ref_pu;
-            self.seriesControl.ref=lp_ref;
+            self.shuntControl.ref = v_ref_pu;
+            self.seriesControl.ref = lp_ref;
         networkFailure = False
-        done=False;
-        bus_index_shunt=1;
-        line_index=1;
-        if self.stateIndex < min(len(self.powerProfile),len(self.loadProfile)):
+        done = False;
+        bus_index_shunt = 1;
+        line_index = 1;
+        if self.stateIndex < min(len(self.powerProfile), len(self.loadProfile)):
             try:
-                dummyRes=(self.net.res_bus.vm_pu,self.net.res_line.loading_percent)
+                dummyRes = (self.net.res_bus.vm_pu, self.net.res_line.loading_percent)
                 ## state = (voltage,ll,angle,p,q)
                 pp.runpp(self.net, run_control=True);
-                if self.method in ('dqn','ddqn'):
-                    reward1 = self.calculateReward(self.net.res_bus.vm_pu, self.net.res_line.loading_percent,self.net.res_bus.va_degree[bus_index_shunt]);
+                if self.method in ('dqn', 'ddqn'):
+                    reward1 = self.calculateReward(self.net.res_bus.vm_pu, self.net.res_line.loading_percent,
+                                                   self.net.res_bus.va_degree[bus_index_shunt]);
                     stateAfterAction = self.getCurrentStateForDQN()
                 else:
                     reward1 = self.calculateReward(self.net.res_bus.vm_pu, self.net.res_line.loading_percent);
                     stateAfterAction = self.getCurrentState()
-                done = self.stateIndex == (len(self.powerProfile)-1)
-            except:
-                print('Unstable environment settings after action')
-                networkFailure = True
-                done = True
-                reward1 = 0
-            if done == False:
-                try:
+                done = self.stateIndex == (len(self.powerProfile) - 1)
+                if done == False:
                     self.incrementLoadProfile()
-                    if self.method in ('dqn','ddqn'):
+                    if self.method in ('dqn', 'ddqn'):
                         reward2 = self.calculateReward(self.net.res_bus.vm_pu, self.net.res_line.loading_percent,
                                                        self.net.res_bus.va_degree[bus_index_shunt]);
                         stateAfterEnvChange = self.getCurrentStateForDQN()
                     else:
                         reward2 = self.calculateReward(self.net.res_bus.vm_pu, self.net.res_line.loading_percent);
                         stateAfterEnvChange = self.getCurrentState()
-                except:
-                    print('Unstable environment settings after env change')
-                    networkFailure = True
-                    reward2 = 0
-            else: #if done after action, there is no env change
-                reward2 = 0
-            reward=0.7*reward1 + 0.3*reward2;
-                #print(reward)
-            # except:
-            #     print('Unstable environment settings');
-            #     #print(stateAfterEnvChange)
-            #     #print(stateAfterAction)
-            #     #print(lp_ref,v_ref_pu)
-            #     #print(dummyRes)
-            #     #print(self.net.load.p_mw[0],self.net.load.q_mvar[0]);
-            #     networkFailure = True;
-            #     reward = 0;
-            #     #return stateAfterAction, reward, networkFailure,stateAfterEnvChange ;
+                reward = 0.7 * reward1 + 0.3 * reward2;
+                # print(reward)
+            except:
+                print('Unstable environment settings');
+                # print(stateAfterEnvChange)
+                # print(stateAfterAction)
+                # print(lp_ref,v_ref_pu)
+                # print(dummyRes)
+                # print(self.net.load.p_mw[0],self.net.load.q_mvar[0]);
+                networkFailure = True;
+                reward = 0;
+                # return stateAfterAction, reward, networkFailure,stateAfterEnvChange ;
         else:
             print('wrong block!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
         stateAfterEnvChange.extend(stateAfterAction)
-        #print(self.errorState)
+        # print(self.errorState)
 
-        #print(reward2)
+        # print(reward2)
         return stateAfterEnvChange, reward, done or networkFailure;
 
     def incrementLoadProfile(self):
