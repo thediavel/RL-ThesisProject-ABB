@@ -240,7 +240,7 @@ class DQN:
                 #currentState = self.getStateFromMeasurements_2([oldMeasurements, currentMeasurements]);
                 if epsComp <= self.epsilon:
                     # Exploration Part
-                    actionIndex = np.random.choice(99, 1)[0]
+                    actionIndex = np.random.choice(len(self.actions), 1)[0]
                 else:
                     # Greedy Approach
                     q_value = self.eval_net.forward(Variable(torch.unsqueeze(torch.unsqueeze(torch.FloatTensor(currentState),0),0)).cuda());
@@ -284,45 +284,67 @@ class DQN:
                 }, self.checkPoint)
         print('training finished')
 
-    def test(self, episodes, numOfStepsPerEpisode, busVoltageIndex):
+    def test(self, episodes, numOfStepsPerEpisode, busVoltageIndex,testAllActions):
         rewards=[]
         regrets=[]
         count=0;
         ul=self.numOfSteps;
         self.eval_net.eval();
         self.env_2bus.setMode('test')
-        copyNetwork = copy.deepcopy(self)
+        if testAllActions:
+            copyNetwork = copy.deepcopy(self)
 
         for j in range(0,episodes):
             self.env_2bus.reset();
-            currentState = self.env_2bus.getCurrentStateForDQN();
+            #currentState = self.env_2bus.getCurrentStateForDQN();
+            currentState = [];
+            for j in range(0, 3):
+                m = self.env_2bus.getCurrentStateForDQN();
+                m.extend(m)
+                currentState.append(m);
+                self.env_2bus.stateIndex += 1;
+                self.env_2bus.scaleLoadAndPowerValue(self.env_2bus.stateIndex)
+                self.env_2bus.runEnv(False);
+
+            currentState.append(self.env_2bus.getCurrentStateForDQN())
+            currentState[3].extend(self.env_2bus.getCurrentStateForDQN())
+            currentState = np.array(currentState)
             rewardForEp=[];
-            rew_aa_ForEp=[]
+            rew_aa_ForEp=[];
             for i in range(0,numOfStepsPerEpisode):
-                q_value = self.eval_net.forward(Variable(torch.unsqueeze(torch.FloatTensor(currentState), 0)).cuda());
+                q_value = self.eval_net.forward(Variable(torch.unsqueeze(torch.FloatTensor(currentState.flatten()), 0)).cuda());
                 # print(torch.max(q_value, 1)[1].shape)
                 actionIndex = torch.max(q_value, 1)[1].data.cpu().numpy()[0]  # return the argmax
                 action = self.getActionFromIndex(actionIndex);
                 # oldMeasurements = currentMeasurements;
-                currentState, reward, done = self.env_2bus.takeAction(action[0], action[1], 'dqn');
+                currentMeasurements, reward, done = self.env_2bus.takeAction(action[0], action[1]);
+                currentState = np.append(currentState, [currentMeasurements], axis=0)
+                # currentState.append(currentMeasurements);
+                currentState = np.delete(currentState, 0, axis=0);
                 rewardForEp.append(reward);
-                _,_,_,_, rew_aa = copyNetwork.runFACTSallActionsRL(busVoltageIndex)
-                rew_aa_ForEp.append(rew_aa)
+                if testAllActions:
+                    _,_,_,_, rew_aa = copyNetwork.runFACTSallActionsRL(busVoltageIndex)
+                    rew_aa_ForEp.append(rew_aa)
                 if done == True:
                     break;
                 #print(self.env_2bus.net.res_bus.vm_pu)
                 #print(self.env_2bus.net.res_line)
             rewards.append(sum(rewardForEp));
-            regrets.append(sum(rew_aa_ForEp) - sum(rewardForEp))
+            if testAllActions:
+                regrets.append(sum(rew_aa_ForEp) - sum(rewardForEp))
 
         # PLot reward and regret
-        fig, (ax1, ax2) = plt.subplots(1,2)
+        if testAllActions:
+            fig, (ax1, ax2) = plt.subplots(1,2)
+        else:
+            fig, (ax1, ax2) = plt.subplots(1, 2)
         ax1.scatter(list(range(0, len(rewards))), rewards)
         ax1.set_ylabel('Reward')
         ax1.set_xlabel('Episode')
-        ax2.scatter(list(range(0, len(regrets))), regrets)
-        ax2.set_ylabel('Regret')
-        ax2.set_xlabel('Episode')
+        if testAllActions:
+            ax2.scatter(list(range(0, len(regrets))), regrets)
+            ax2.set_ylabel('Regret')
+            ax2.set_xlabel('Episode')
         plt.show()
         #print(sum(rewards))
         #self.writer.add_graph(self.eval_net, Variable(torch.unsqueeze(torch.FloatTensor(currentState), 0)).cuda())
@@ -372,11 +394,11 @@ class DQN:
         # Test all actions
         for i in range(0, len(self.actions)):
             action = self.getActionFromIndex(i)
-            nextStateMeas, rew, done = copyNetwork.takeAction(action[0], action[1], 'dqn')
+            nextStateMeas, rew, done = copyNetwork.takeAction(action[0], action[1] )
             copyNetwork.stateIndex -= 1
             bestAction = action if rew > reward else bestAction  # Save best action
         # Take best action in actual environment
-        nextStateMeasurements, reward, done = self.env_2bus.takeAction(bestAction[0], bestAction[1],'dqn')
+        nextStateMeasurements, reward, done = self.env_2bus.takeAction(bestAction[0], bestAction[1])
         busVoltage = self.env_2bus.net.res_bus.vm_pu[busVoltageIndex]
         lp_max = max(self.env_2bus.net.res_line.loading_percent)
         lp_std = np.std(self.env_2bus.net.res_line.loading_percent)
