@@ -512,7 +512,7 @@ class powerGrid_ieee2:
     def getCurrentStateForDQN(self):
         bus_index_shunt = 1
         line_index = 1;
-        return [self.net.res_bus.vm_pu[bus_index_shunt], self.net.res_line.loading_percent[line_index], self.net.res_bus.va_degree[bus_index_shunt]];
+        return [self.net.res_bus.vm_pu[bus_index_shunt], self.net.res_line.loading_percent[line_index]/150, self.net.res_bus.va_degree[bus_index_shunt]/30];
 
     # Return mean line loading in system. Emulation of what system operator would have set loading reference to.
     def lp_ref_operator(self):
@@ -646,7 +646,7 @@ class powerGrid_ieee2:
                 rew = math.exp(rew*10)*-10;
             loadingPercentInstability=np.std(loadingPercent) * len(loadingPercent);
             rew = rew - loadingPercentInstability;
-            rew=rew if abs(loadAngle)<30 else rew-200;
+            rew=rew if abs(loadAngle)<1 else rew-200;
             #print(rew)
         except:
             print('exception in calculate reward')
