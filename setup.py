@@ -307,7 +307,7 @@ class powerGrid_ieee2:
 
 
         self.actionSpace = {'v_ref_pu': [i*5 / 100 for i in range(16, 25)], 'lp_ref': [i * 15 for i in range(0, 11)]}
-        self.deepActionSpace = {'v_ref_pu': [i / 100 for i in range(90, 111)], 'lp_ref': [i * 5 for i in range(0, 31)]}
+        self.deepActionSpace = {'v_ref_pu': [i/ 100 for i in range(45, 56)], 'lp_ref': [i * 10 for i in range(0, 16)]}
         self.k_old = 0;
         self.q_old = 0;
 
@@ -500,7 +500,13 @@ class powerGrid_ieee2:
             pp.runpp(self.net, run_control=runControl);
             #print('Environment has been successfully initialized');
         except:
-            print('Some error occurred while running environment');
+            #print(self.net.load.p_mw[0],self.net.load.q_mvar[0]);
+            #print(self.stateIndex)
+            #print(len(self.powerProfile))
+            if runControl:
+                print('Some error occurred while running environment after load increment in runEnv Function in DQN');
+            else:
+                print('Some error occurred while running environment after reset in runEnv Function in DQN');
             raise Exception('cannot proceed at these settings. Please fix the environment settings');
 
     ## Retreieve voltage and line loading percent as measurements of current state
