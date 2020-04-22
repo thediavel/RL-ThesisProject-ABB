@@ -48,6 +48,7 @@ class BasicBuffer:
 
 class DQN:
     def __init__(self, ieeeBusSystem, lr, memorySize, batchSize,  decayRate, numOfEpisodes, stepsPerEpisode, epsilon, annealingConstant, annealAfter, targetUpdateAfter,expandActions=False,ddqnMode=False):
+        prefix='ddqn' if ddqnMode else 'dqn'
         self.env_2bus = powerGrid_ieee2('ddqn' if ddqnMode else 'dqn');
         self.ddqnMode=ddqnMode;
         if expandActions:
@@ -79,11 +80,11 @@ class DQN:
         self.annealAfter = annealAfter
         self.target_update_iter=targetUpdateAfter
         self.allRewards=[];
-        self.fileName='dqn_lr' + str(lr) +'tua'+str(targetUpdateAfter)+'bs' +str(batchSize)+'ms'+str(memorySize)+'dr' + str(decayRate) + 'noe' + str(
+        self.fileName=prefix+'_lr' + str(lr) +'tua'+str(targetUpdateAfter)+'bs' +str(batchSize)+'ms'+str(memorySize)+'dr' + str(decayRate) + 'noe' + str(
             numOfEpisodes) + 'spe' + str(stepsPerEpisode) + 'e' + str(epsilon) + 'ac' + str(
             annealingConstant) + 'aa' + str(annealAfter)+'op'+str(op);
         self.checkPoint = 'DQN_Checkpoints/'+self.fileName+'.tar';
-
+        print(self.checkPoint)
         if os.path.isfile(self.checkPoint):
             print('loading state values from last saved checkpoint');
             checkpoint = torch.load(self.checkPoint);
@@ -186,7 +187,7 @@ class DQN:
         #print(loss.item())
         self.runningLoss+=loss.item()
         self.runningRewards+=sum(b_r)/self.batch_size
-
+        #print(self.learn_step_counter)
         if self.learn_step_counter % 200 == 0:  # every 200 mini-batches...
 
             # ...log the running loss
@@ -290,6 +291,8 @@ class DQN:
         count=0;
         ul=self.numOfSteps;
         self.eval_net.eval();
+        voltage=[]
+        voltage2 = []
         self.env_2bus.setMode('test')
         if testAllActions:
             copyNetwork = copy.deepcopy(self)
@@ -319,6 +322,8 @@ class DQN:
                 # oldMeasurements = currentMeasurements;
                 currentMeasurements, reward, done = self.env_2bus.takeAction(action[0], action[1]);
                 currentState = np.append(currentState, [currentMeasurements], axis=0)
+                voltage.append(0.7*currentMeasurements[3] + 0.3*currentMeasurements[0])
+                voltage2.append(currentMeasurements[0])
                 # currentState.append(currentMeasurements);
                 currentState = np.delete(currentState, 0, axis=0);
                 rewardForEp.append(reward);
@@ -335,16 +340,24 @@ class DQN:
 
         # PLot reward and regret
         if testAllActions:
-            fig, (ax1, ax2) = plt.subplots(1,2)
+            fig, (ax1, ax2, ax3, ax4) = plt.subplots(1,4)
         else:
-            fig, (ax1, ax2) = plt.subplots(1, 2)
+            fig, (ax1, ax2, ax3) = plt.subplots(1, 3)
         ax1.scatter(list(range(0, len(rewards))), rewards)
         ax1.set_ylabel('Reward')
         ax1.set_xlabel('Episode')
+        #print( voltage)
+        ax2.plot(list(range(0, len(voltage))), voltage)
+        ax2.set_ylabel('voltage')
+        ax2.set_xlabel('Episode')
+
+        ax3.plot(list(range(0, len(voltage2))), voltage2)
+        ax3.set_ylabel('voltage2')
+        ax3.set_xlabel('Episode')
         if testAllActions:
-            ax2.scatter(list(range(0, len(regrets))), regrets)
-            ax2.set_ylabel('Regret')
-            ax2.set_xlabel('Episode')
+            ax4.scatter(list(range(0, len(regrets))), regrets)
+            ax4.set_ylabel('Regret')
+            ax4.set_xlabel('Episode')
         plt.show()
         #print(sum(rewards))
         #self.writer.add_graph(self.eval_net, Variable(torch.unsqueeze(torch.FloatTensor(currentState), 0)).cuda())
