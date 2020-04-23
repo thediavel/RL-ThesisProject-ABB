@@ -307,7 +307,8 @@ class powerGrid_ieee2:
 
 
         self.actionSpace = {'v_ref_pu': [i*5 / 100 for i in range(16, 25)], 'lp_ref': [i * 15 for i in range(0, 11)]}
-        self.deepActionSpace = {'v_ref_pu': [i/ 100 for i in range(45, 56)], 'lp_ref': [i * 10 for i in range(0, 16)]}
+        #self.deepActionSpace = {'v_ref_pu': [i/ 100 for i in range(90, 111)], 'lp_ref': [i * 5 for i in range(0, 31)]}
+        self.deepActionSpace = {'v_ref_pu': [i*2/ 100 for i in range(45, 56)], 'lp_ref': [i * 10 for i in range(0, 16)]}
         self.k_old = 0;
         self.q_old = 0;
 

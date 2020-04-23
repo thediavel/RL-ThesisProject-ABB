@@ -27,9 +27,13 @@ class ieee2_net(nn.Module):
         super(ieee2_net, self).__init__()
         #self.conv1 = nn.Conv2d(inputChannels, 8, kernel_size=3, stride=1, padding=1)
         #self.conv2 = nn.Conv2d(8, 16, kernel_size=2, stride=2)
+
+        # self.fc1 = nn.Linear(input, 16 * 3 * 2);
+        # self.fc2 = nn.Linear(16 * 3 * 2, 16 * 3 * 2 * 2);
+        # self.fc3 = nn.Linear(16 * 3 * 2 * 2, num_actions);
         self.fc1 = nn.Linear(input, input*2);
         self.fc2 = nn.Linear(input*2, input*2*2);
-        self.fc3 = nn.Linear(input*2*2   , num_actions);
+        self.fc3 = nn.Linear(input*2*2, num_actions);
         #self.fc3 = nn.Linear(18, 54);
         #self.fc4 = nn.Linear(54, num_actions)
         self.drop_layer = nn.Dropout(p=p)
