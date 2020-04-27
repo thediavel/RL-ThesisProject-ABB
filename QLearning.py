@@ -110,7 +110,7 @@ class qLearning:
                 #print(q_table[currentState].unique())
                 action = self.getActionFromIndex(actionIndex);
                 oldMeasurements=currentMeasurements;
-                currentMeasurements, reward, done = self.env_2bus.takeAction(action[0], action[1]);
+                currentMeasurements, reward, done, _ = self.env_2bus.takeAction(action[0], action[1]);
                 # if i == ul-1:
                 #     oldMeasurements = currentMeasurements;
                 #     ul+=self.numOfSteps;
@@ -155,7 +155,7 @@ class qLearning:
                 #copyNw.runEnv()
                 #print(copyNw.net.load)
                 action = self.getActionFromIndex(i);
-                nextStateMeasurements, reward, done = copyNetwork.takeAction(action[0], action[1]);
+                nextStateMeasurements, reward, done, _ = copyNetwork.takeAction(action[0], action[1]);
                 rewards.append(reward);
                 compensation.append({'k':copyNetwork.k_old,'q': copyNetwork.q_old})
                 measurements.append({'v_bus1': copyNetwork.net.res_bus.vm_pu[1], 'lp_std': np.std(copyNetwork.net.res_line.loading_percent)})
@@ -164,7 +164,7 @@ class qLearning:
             actionIndex = self.q_table[currentState].idxmax();
             action = self.getActionFromIndex(actionIndex);
             oldMeasurements = currentMeasurements;
-            currentMeasurements, reward, done = self.env_2bus.takeAction(action[0], action[1]);
+            currentMeasurements, reward, done, _ = self.env_2bus.takeAction(action[0], action[1]);
             print('algorithm reward: '+str(reward));
             print(compensation[actionIndex])
             print('max possible reward from all actions: '+str(max(rewards)));
@@ -173,7 +173,7 @@ class qLearning:
             print(measurements[actionIndex])
             greedyReward+=rewards[actionIndex]
         #action = getActionFromIndex(actionIndex);
-        #nextStateMeasurements2, reward2, done2 = env_2bus.takeAction(action[0], action[1]);
+        #nextStateMeasurements2, reward2, done2, _ = env_2bus.takeAction(action[0], action[1]);
         #print(env_2bus.stateIndex-1)
         #print(reward2);
         #print(rewards)
@@ -210,7 +210,7 @@ class qLearning:
                     # print(q_table[currentState].unique())
                     action = currentModel.getActionFromIndex(actionIndex);
                     oldMeasurements = currentMeasurements;
-                    currentMeasurements, reward, done = currentModel.env_2bus.takeAction(action[0], action[1]);
+                    currentMeasurements, reward, done, _ = currentModel.env_2bus.takeAction(action[0], action[1]);
                     rewardForEp += reward;
                     # print(self.env_2bus.net.res_bus.vm_pu)
                     # print(self.env_2bus.net.res_line)
@@ -253,7 +253,7 @@ class qLearning:
                     actionIndex=self.q_table[currentState].idxmax();
                 action = self.getActionFromIndex(actionIndex);
                 oldMeasurements=currentMeasurements;
-                currentMeasurements, reward, done = self.env_2bus.takeAction(action[0],action[1])
+                currentMeasurements, reward, done, _ = self.env_2bus.takeAction(action[0],action[1])
                 accumulatedReward += reward;
                 if done:
                     nextStateMaxQValue = 0;
@@ -306,7 +306,7 @@ class qLearning:
         action = self.getActionFromIndex(actionIndex)
         if takeLastAction:
             action=['na','na']
-        nextStateMeasurements, reward, done = self.env_2bus.takeAction(action[0], action[1])
+        nextStateMeasurements, reward, done, _ = self.env_2bus.takeAction(action[0], action[1])
         busVoltage = self.env_2bus.net.res_bus.vm_pu[busVoltageIndex]
         lp_max = max(self.env_2bus.net.res_line.loading_percent)
         lp_std = np.std(self.env_2bus.net.res_line.loading_percent)

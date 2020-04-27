@@ -531,6 +531,7 @@ class powerGrid_ieee2:
         # print('taking action')
         stateAfterAction = copy.deepcopy(self.errorState);
         stateAfterEnvChange = copy.deepcopy(self.errorState);
+        measAfterAction = [-2, -1000, -1000]
         self.net.switch.at[0, 'closed'] = True
         self.net.switch.at[1, 'closed'] = False
         if lp_ref != 'na' and v_ref_pu != 'na':
@@ -553,6 +554,7 @@ class powerGrid_ieee2:
                     reward1 = self.calculateReward(self.net.res_bus.vm_pu, self.net.res_line.loading_percent);
                     stateAfterAction = self.getCurrentState()
                 #print('rew1: ', reward1)
+                measAfterAction = [self.net.res_bus.vm_pu[1], max(self.net.res_line.loading_percent), np.std(self.net.res_line.loading_percent)]
                 done = self.stateIndex == (len(self.powerProfile) - 1)
                 if done == False:
                     self.incrementLoadProfile()
@@ -582,7 +584,7 @@ class powerGrid_ieee2:
 
         # print(reward2)
         #print('totrew: ', reward)
-        return stateAfterEnvChange, reward, done or networkFailure;
+        return stateAfterEnvChange, reward, done or networkFailure, measAfterAction;
 
     def incrementLoadProfile(self):
         self.stateIndex += 1;
@@ -664,7 +666,7 @@ class powerGrid_ieee2:
             print(loadingPercent)
             return 0;
         rew = (200+rew)/200 # normalise between 0-1
-        if rewtemp > 0.15 or abs(loadAngle)<30: # IF voltage deviating more than 0.15 pu action is very very bad.
+        if rewtemp > 0.15 or abs(loadAngle)>=30: # IF voltage deviating more than 0.15 pu action is very very bad.
             rew = 0.001 #Also makes sure that final rew >=0
         if rew < 0:
             rew = 0

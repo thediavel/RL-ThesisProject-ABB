@@ -251,7 +251,7 @@ class DQN:
                     #actionIndex = self.q_table[currentState].idxmax();
                 action = self.getActionFromIndex(actionIndex);
                 #oldMeasurements = currentMeasurements;
-                currentMeasurements, reward, done = self.env_2bus.takeAction(action[0], action[1]);
+                currentMeasurements, reward, done, _ = self.env_2bus.takeAction(action[0], action[1]);
                 oldState=currentState;
                 #currentMeasurements=np.array(currentMeasurements);
                 #print(currentMeasurements)
@@ -321,7 +321,7 @@ class DQN:
                 actionIndex = torch.max(q_value, 1)[1].data.cpu().numpy()[0]  # return the argmax
                 action = self.getActionFromIndex(actionIndex);
                 # oldMeasurements = currentMeasurements;
-                currentMeasurements, reward, done = self.env_2bus.takeAction(action[0], action[1]);
+                currentMeasurements, reward, done, _ = self.env_2bus.takeAction(action[0], action[1]);
                 currentState = np.append(currentState, [currentMeasurements], axis=0)
                 voltage.append(0.7*currentMeasurements[3] + 0.3*currentMeasurements[0])
                 voltage2.append(currentMeasurements[0])
@@ -371,15 +371,6 @@ class DQN:
     def runFACTSnoRL(self, v_ref, lp_ref, bus_index_shunt, bus_index_voltage, line_index, series_comp_enabl):
         self.env_2bus.net.switch.at[1, 'closed'] = False if series_comp_enabl else True
         self.env_2bus.net.switch.at[0, 'closed'] = True
-        ##shunt compenstation
-        q_comp = self.env_2bus.Shunt_q_comp(v_ref, bus_index_shunt, self.env_2bus.q_old);
-        self.env_2bus.q_old = q_comp;
-        self.env_2bus.net.shunt.q_mvar = q_comp;
-        ##series compensation
-        k_x_comp_pu = self.env_2bus.K_x_comp_pu(lp_ref, line_index, self.env_2bus.k_old);
-        self.env_2bus.k_old = k_x_comp_pu;
-        x_line_pu = self.env_2bus.X_pu(line_index)
-        self.env_2bus.net.impedance.loc[0, ['xft_pu', 'xtf_pu']] = x_line_pu * k_x_comp_pu
         self.env_2bus.runEnv(runControl=True)
         busVoltage = self.env_2bus.net.res_bus.vm_pu[bus_index_voltage]
         lp_max = max(self.env_2bus.net.res_line.loading_percent)
@@ -390,32 +381,31 @@ class DQN:
     def runFACTSgreedyRL(self, busVoltageIndex, currentState,takeLastAction):
         #print(len(currentState))
         q_value = self.eval_net.forward(Variable(torch.unsqueeze(torch.FloatTensor(currentState), 0)).cuda());
-        # print(torch.max(q_value, 1)[1].shape)
         actionIndex = torch.max(q_value, 1)[1].data.cpu().numpy()[0]  # return the argmax
         action = self.getActionFromIndex(actionIndex);
-        nextStateMeasurements, reward, done = self.env_2bus.takeAction(action[0], action[1],'dqn')
-        busVoltage = self.env_2bus.net.res_bus.vm_pu[busVoltageIndex]
-        lp_max = max(self.env_2bus.net.res_line.loading_percent)
-        lp_std = np.std(self.env_2bus.net.res_line.loading_percent)
+        nextStateMeasurements, reward, done, measAfterAction = self.env_2bus.takeAction(action[0], action[1],'dqn')
+        busVoltage = measAfterAction[0]
+        lp_max = measAfterAction[1]
+        lp_std = measAfterAction[2]
         return nextStateMeasurements, busVoltage, lp_max, lp_std
 
-    ## Run environment and try all actions an choose highest reward
+    ## Run environment and try all actions and choose highest reward
     def runFACTSallActionsRL(self, busVoltageIndex):
         copyNetwork = copy.deepcopy(self.env_2bus)
         #copyNetwork.stateIndex += 1
-        reward = -100000
+        reward = 0
         bestAction = []
         # Test all actions
         for i in range(0, len(self.actions)):
             action = self.getActionFromIndex(i)
-            nextStateMeas, rew, done = copyNetwork.takeAction(action[0], action[1] )
+            nextStateMeas, rew, done, _ = copyNetwork.takeAction(action[0], action[1] )
             copyNetwork.stateIndex -= 1
             bestAction = action if rew > reward else bestAction  # Save best action
         # Take best action in actual environment
-        nextStateMeasurements, reward, done = self.env_2bus.takeAction(bestAction[0], bestAction[1])
-        busVoltage = self.env_2bus.net.res_bus.vm_pu[busVoltageIndex]
-        lp_max = max(self.env_2bus.net.res_line.loading_percent)
-        lp_std = np.std(self.env_2bus.net.res_line.loading_percent)
+        nextStateMeasurements, reward, done, measAfterAction = self.env_2bus.takeAction(bestAction[0], bestAction[1])
+        busVoltage = measAfterAction[0]
+        lp_max = measAfterAction[1]
+        lp_std = measAfterAction[2]
         return nextStateMeasurements, busVoltage, lp_max, lp_std, reward
 
     def comparePerformance(self, steps, oper_upd_interval, bus_index_shunt, bus_index_voltage, line_index,testAllActionsFlag):
@@ -453,6 +443,10 @@ class DQN:
         qObj_env_FACTS_noSeries = copy.deepcopy(self)
         if testAllActionsFlag:
             qObj_env_RLFACTS_allAct = copy.deepcopy(self)
+
+        # Make sure FACTS devices disabled for noFACTS case
+        qObj_env_noFACTS.env_2bus.net.switch.at[0, 'closed'] = False
+        qObj_env_noFACTS.env_2bus.net.switch.at[1, 'closed'] = True
 
         # To plot horizontal axis in nose-curve
         load_nom_pu = 2 #the nominal IEEE load in pu
@@ -501,12 +495,12 @@ class DQN:
 
             # Increment state
             stateIndex += 1
-            qObj_env_noFACTS.env_2bus.scaleLoadAndPowerValue(stateIndex)
-            qObj_env_FACTS.env_2bus.scaleLoadAndPowerValue(stateIndex)
-            qObj_env_RLFACTS.env_2bus.scaleLoadAndPowerValue(stateIndex)
-            qObj_env_FACTS_noSeries.env_2bus.scaleLoadAndPowerValue(stateIndex)
-            if testAllActionsFlag:
-                qObj_env_RLFACTS_allAct.env_2bus.scaleLoadAndPowerValue(stateIndex)
+            qObj_env_noFACTS.env_2bus.scaleLoadAndPowerValue(stateIndex) #Only for this, rest are incremented within their respective functions
+            #qObj_env_FACTS.env_2bus.scaleLoadAndPowerValue(stateIndex)
+            #qObj_env_RLFACTS.env_2bus.scaleLoadAndPowerValue(stateIndex)
+            #qObj_env_FACTS_noSeries.env_2bus.scaleLoadAndPowerValue(stateIndex)
+            #if testAllActionsFlag:
+            #    qObj_env_RLFACTS_allAct.env_2bus.scaleLoadAndPowerValue(stateIndex)
 
             #print(i)
 
