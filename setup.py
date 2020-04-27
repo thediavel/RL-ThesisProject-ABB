@@ -308,7 +308,7 @@ class powerGrid_ieee2:
 
         self.actionSpace = {'v_ref_pu': [i*5 / 100 for i in range(16, 25)], 'lp_ref': [i * 15 for i in range(0, 11)]}
         #self.deepActionSpace = {'v_ref_pu': [i/ 100 for i in range(90, 111)], 'lp_ref': [i * 5 for i in range(0, 31)]}
-        self.deepActionSpace = {'v_ref_pu': [i*2/ 100 for i in range(45, 56)], 'lp_ref': [i * 10 for i in range(0, 16)]}
+        self.deepActionSpace = {'v_ref_pu': [i*2/100 for i in range(45, 56)], 'lp_ref': [i * 10 for i in range(0, 16)]}
         self.k_old = 0;
         self.q_old = 0;
 
@@ -552,6 +552,7 @@ class powerGrid_ieee2:
                 else:
                     reward1 = self.calculateReward(self.net.res_bus.vm_pu, self.net.res_line.loading_percent);
                     stateAfterAction = self.getCurrentState()
+                #print('rew1: ', reward1)
                 done = self.stateIndex == (len(self.powerProfile) - 1)
                 if done == False:
                     self.incrementLoadProfile()
@@ -562,8 +563,8 @@ class powerGrid_ieee2:
                     else:
                         reward2 = self.calculateReward(self.net.res_bus.vm_pu, self.net.res_line.loading_percent);
                         stateAfterEnvChange = self.getCurrentState()
+                #print('rew2: ',reward2)
                 reward = 0.7 * reward1 + 0.3 * reward2;
-                # print(reward)
             except:
                 print('Unstable environment settings');
                 # print(stateAfterEnvChange)
@@ -580,6 +581,7 @@ class powerGrid_ieee2:
         # print(self.errorState)
 
         # print(reward2)
+        #print('totrew: ', reward)
         return stateAfterEnvChange, reward, done or networkFailure;
 
     def incrementLoadProfile(self):
@@ -621,8 +623,18 @@ class powerGrid_ieee2:
     ## Resets environment choosing new starting state, used for beginning of each episode
     def reset(self):
         self.stateIndex = self.getstartingIndex()
+
+        #Disable FACTS
         self.net.switch.at[0, 'closed'] = False
         self.net.switch.at[1, 'closed'] = True
+
+        # Make sure FACTS output is reset for controllers to work properly
+        #print(self.net.shunt.q_mvar[0])
+        #self.net.shunt.q_mvar[0] = 0
+        #print(self.net.impedance.loc[0, ['xft_pu']])
+        #self.net.impedance.loc[0, ['xft_pu', 'xtf_pu']] =
+        #self.net.shunt.q_mvar
+
         self.scaleLoadAndPowerValue(self.stateIndex);
         try:
             pp.runpp(self.net, run_control=False);
@@ -639,17 +651,22 @@ class powerGrid_ieee2:
                     rew=voltages[i]-1;
                 else:
                     rew=1-voltages[i];
-                rew = math.exp(rew*10)*-10;
-            loadingPercentInstability=np.std(loadingPercent) * len(loadingPercent);
-            rew = rew - loadingPercentInstability;
-            rew=rew if abs(loadAngle)<1 else rew-200;
+                rewtemp = rew # For storage to set reward to 0
+            rew = math.exp(rew*10)*-20;
             #print(rew)
+            loadingPercentInstability=np.std(loadingPercent)# Think it works better without this addition: * len(loadingPercent);
+            rew = rew - loadingPercentInstability;
+            #print(rew)
+            rew=rew if abs(loadAngle)<30 else rew-200;
         except:
             print('exception in calculate reward')
             print(voltages);
             print(loadingPercent)
             return 0;
-        return 500+rew
+        rew = (500+rew)/500 # normalise between 0-1
+        if rewtemp > 0.15: # IF voltage deviating more than 0.15 pu action is very very bad.
+            rew = 0.001 #Also makes sure that final rew >=0
+        return rew
 
     ## Simple plot diagram
     def plotGridFlow(self):

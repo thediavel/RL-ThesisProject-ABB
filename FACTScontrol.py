@@ -122,11 +122,11 @@ class SeriesFACTS(ct.basic_controller.Controller):
         op = self.x_line_pu * (K_p * self.x_comp_max * (self.lp_delta) + K_i * self.x_comp_max * self.lp_delta_accum)
 
         # Make sure output don't exceed rating
-        if op + 0.00001 >= self.x_comp_max:
-            op = self.x_comp_max
+        if op + 0.00001 >= self.x_line_pu * self.x_comp_max:
+            op = self.x_line_pu * self.x_comp_max
             self.maxed_counter += 1
-        elif op - 0.00001 <= self.x_comp_min:
-            op = self.x_comp_min
+        elif op - 0.00001 <= self.x_line_pu * self.x_comp_min:
+            op = self.x_line_pu * self.x_comp_min
             self.maxed_counter += 1
 
         # Set output of device
