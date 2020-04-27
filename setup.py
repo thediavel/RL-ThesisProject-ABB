@@ -657,15 +657,17 @@ class powerGrid_ieee2:
             loadingPercentInstability=np.std(loadingPercent)# Think it works better without this addition: * len(loadingPercent);
             rew = rew - loadingPercentInstability;
             #print(rew)
-            rew=rew if abs(loadAngle)<30 else rew-200;
+            #rew=rew if abs(loadAngle)<30 else rew-200;
         except:
             print('exception in calculate reward')
             print(voltages);
             print(loadingPercent)
             return 0;
-        rew = (500+rew)/500 # normalise between 0-1
-        if rewtemp > 0.15: # IF voltage deviating more than 0.15 pu action is very very bad.
+        rew = (200+rew)/200 # normalise between 0-1
+        if rewtemp > 0.15 or abs(loadAngle)<30: # IF voltage deviating more than 0.15 pu action is very very bad.
             rew = 0.001 #Also makes sure that final rew >=0
+        if rew < 0:
+            rew = 0
         return rew
 
     ## Simple plot diagram
