@@ -379,11 +379,11 @@ class DQN:
 
     ## Run the environment controlled by greedy RL
     def runFACTSgreedyRL(self, busVoltageIndex, currentState,takeLastAction):
-        #print(len(currentState))
-        q_value = self.eval_net.forward(Variable(torch.unsqueeze(torch.FloatTensor(currentState), 0)).cuda());
+        #q_value = self.eval_net.forward(Variable(torch.unsqueeze(torch.FloatTensor(currentState), 0)).cuda());
+        q_value = self.eval_net.forward(Variable(torch.unsqueeze(torch.FloatTensor(currentState.flatten()), 0)).cuda())
         actionIndex = torch.max(q_value, 1)[1].data.cpu().numpy()[0]  # return the argmax
         action = self.getActionFromIndex(actionIndex);
-        nextStateMeasurements, reward, done, measAfterAction = self.env_2bus.takeAction(action[0], action[1],'dqn')
+        nextStateMeasurements, reward, done, measAfterAction = self.env_2bus.takeAction(action[0], action[1])
         busVoltage = measAfterAction[0]
         lp_max = measAfterAction[1]
         lp_std = measAfterAction[2]
@@ -402,11 +402,11 @@ class DQN:
             copyNetwork.stateIndex -= 1
             bestAction = action if rew > reward else bestAction  # Save best action
         # Take best action in actual environment
-        nextStateMeasurements, reward, done, measAfterAction = self.env_2bus.takeAction(bestAction[0], bestAction[1])
+        currentStateMeasurements, reward, done, measAfterAction = self.env_2bus.takeAction(bestAction[0], bestAction[1])
         busVoltage = measAfterAction[0]
         lp_max = measAfterAction[1]
         lp_std = measAfterAction[2]
-        return nextStateMeasurements, busVoltage, lp_max, lp_std, reward
+        return currentStateMeasurements, busVoltage, lp_max, lp_std, reward
 
     def comparePerformance(self, steps, oper_upd_interval, bus_index_shunt, bus_index_voltage, line_index,testAllActionsFlag):
         v_noFACTS = []
@@ -434,19 +434,34 @@ class DQN:
             stateIndex = self.env_2bus.stateIndex
             loadProfile = self.env_2bus.loadProfile
 
-        currentState =self.env_2bus.getCurrentStateForDQN();
+        # Create copy of network for historic measurements
+        temp = copy.deepcopy(self)
+        temp.eval_net.eval()
+
+        #Run for history measurements to get full state repr for RL.
+        currentState = [];
+        for j in range(0, 3):
+            m = temp.env_2bus.getCurrentStateForDQN();
+            m.extend(m) # creates the 2nd part of the state, "after action" but was no action with RL disabled in this part.
+            currentState.append(m);
+            temp.env_2bus.stateIndex += 1;
+            temp.env_2bus.scaleLoadAndPowerValue(temp.env_2bus.stateIndex)
+            temp.env_2bus.runEnv(False);
+        currentState.append(self.env_2bus.getCurrentStateForDQN())
+        currentState[3].extend(self.env_2bus.getCurrentStateForDQN())
+        currentState = np.array(currentState) # Only used for RLFACTS case
 
         # Need seperate copy for each scenario
-        qObj_env_noFACTS = copy.deepcopy(self)
-        qObj_env_FACTS = copy.deepcopy(self)
-        qObj_env_RLFACTS = copy.deepcopy(self)
-        qObj_env_FACTS_noSeries = copy.deepcopy(self)
+        qObj_env_noFACTS = copy.deepcopy(temp)
+        qObj_env_FACTS = copy.deepcopy(temp)
+        qObj_env_RLFACTS = copy.deepcopy(temp)
+        qObj_env_FACTS_noSeries = copy.deepcopy(temp)
         if testAllActionsFlag:
-            qObj_env_RLFACTS_allAct = copy.deepcopy(self)
+            qObj_env_RLFACTS_allAct = copy.deepcopy(temp)
 
         # Make sure FACTS devices disabled for noFACTS case
-        qObj_env_noFACTS.env_2bus.net.switch.at[0, 'closed'] = False
-        qObj_env_noFACTS.env_2bus.net.switch.at[1, 'closed'] = True
+        #qObj_env_noFACTS.env_2bus.net.switch.at[0, 'closed'] = False
+        #qObj_env_noFACTS.env_2bus.net.switch.at[1, 'closed'] = True
 
         # To plot horizontal axis in nose-curve
         load_nom_pu = 2 #the nominal IEEE load in pu
@@ -481,31 +496,33 @@ class DQN:
             # RLFACTS
             takeLastAction=False;
             qObj_env_RLFACTS.eval_net.eval();
-            currentState, voltage, lp_max, lp_std = qObj_env_RLFACTS.runFACTSgreedyRL(bus_index_voltage, currentState, takeLastAction)  # runpp is done within this function
+            currentMeasurements, voltage, lp_max, lp_std = qObj_env_RLFACTS.runFACTSgreedyRL(bus_index_voltage, currentState, takeLastAction)  # runpp is done within this function
+            currentState = np.append(currentState, [currentMeasurements], axis=0)
+            currentState = np.delete(currentState, 0, axis=0);
+
             v_RLFACTS.append(voltage)
             lp_max_RLFACTS.append(lp_max)
             lp_std_RLFACTS.append(lp_std)
 
             if testAllActionsFlag:
             # RL All actions
-                currentMeasurements, voltage, lp_max, lp_std, _ = qObj_env_RLFACTS_allAct.runFACTSallActionsRL(bus_index_voltage)
+                currentState_RLAllAct, voltage, lp_max, lp_std, _ = qObj_env_RLFACTS_allAct.runFACTSallActionsRL(bus_index_voltage)
                 v_RLFACTS_allAct.append(voltage)
                 lp_max_RLFACTS_allAct.append(lp_max)
                 lp_std_RLFACTS_allAct.append(lp_std)
 
             # Increment state
             stateIndex += 1
-            qObj_env_noFACTS.env_2bus.scaleLoadAndPowerValue(stateIndex) #Only for this, rest are incremented within their respective functions
-            #qObj_env_FACTS.env_2bus.scaleLoadAndPowerValue(stateIndex)
-            #qObj_env_RLFACTS.env_2bus.scaleLoadAndPowerValue(stateIndex)
-            #qObj_env_FACTS_noSeries.env_2bus.scaleLoadAndPowerValue(stateIndex)
+            qObj_env_noFACTS.env_2bus.scaleLoadAndPowerValue(stateIndex) #Only for these, rest are incremented within their respective functions
+            qObj_env_FACTS.env_2bus.scaleLoadAndPowerValue(stateIndex)
+            qObj_env_FACTS_noSeries.env_2bus.scaleLoadAndPowerValue(stateIndex)
             #if testAllActionsFlag:
             #    qObj_env_RLFACTS_allAct.env_2bus.scaleLoadAndPowerValue(stateIndex)
 
             #print(i)
 
         # Make plots
-        i_list = list(range(1, steps))
+        i_list = list(range(1, steps+1))
         fig, ax1 = plt.subplots()
         color = 'tab:blue'
         ax1.set_xlabel('Time series')
