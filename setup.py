@@ -289,7 +289,7 @@ class powerGrid_ieee2:
     def __init__(self,method):
         #print('in init. Here we lay down the grid structure and load some random state values based on IEEE dataset');
         self.method=method;
-        if self.method in ('dqn','ddqn'):
+        if self.method in ('dqn','ddqn','td3'):
             self.errorState=[-2, -1000, -90];
             self.numberOfTimeStepsPerState=3
         else:
@@ -546,7 +546,7 @@ class powerGrid_ieee2:
                 dummyRes = (self.net.res_bus.vm_pu, self.net.res_line.loading_percent)
                 ## state = (voltage,ll,angle,p,q)
                 pp.runpp(self.net, run_control=True);
-                if self.method in ('dqn', 'ddqn'):
+                if self.method in ('dqn', 'ddqn','td3'):
                     reward1 = self.calculateReward(self.net.res_bus.vm_pu, self.net.res_line.loading_percent,
                                                    self.net.res_bus.va_degree[bus_index_shunt]);
                     stateAfterAction = self.getCurrentStateForDQN()
@@ -558,7 +558,7 @@ class powerGrid_ieee2:
                 done = self.stateIndex == (len(self.powerProfile) - 1)
                 if done == False:
                     self.incrementLoadProfile()
-                    if self.method in ('dqn', 'ddqn'):
+                    if self.method in ('dqn', 'ddqn','td3'):
                         reward2 = self.calculateReward(self.net.res_bus.vm_pu, self.net.res_line.loading_percent,
                                                        self.net.res_bus.va_degree[bus_index_shunt]);
                         stateAfterEnvChange = self.getCurrentStateForDQN()
