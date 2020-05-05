@@ -397,21 +397,31 @@ class DQN:
 
     ## Run environment and try all actions and choose highest reward
     def runFACTSallActionsRL(self, busVoltageIndex):
-        copyNetwork = copy.deepcopy(self.env_2bus)
-        #copyNetwork.stateIndex += 1
+        copyNetwork = copy.deepcopy(self)
         reward = 0
         bestAction = []
+        rewArr = []
+
+        #Create action space with high resolution:
+        copyNetwork.actionSpace = {'v_ref_pu': [i/1000 for i in range(900, 1101)], 'lp_ref': [i for i in range(0, 151)]}
+        copyNetwork.actions = ['v_ref:' + str(x) + ';lp_ref:' + str(y) for x in copyNetwork.actionSpace['v_ref_pu']
+                        for y in copyNetwork.actionSpace['lp_ref']]
+
         # Test all actions
-        for i in range(0, len(self.actions)):
-            action = self.getActionFromIndex(i)
-            nextStateMeas, rew, done, _ = copyNetwork.takeAction(action[0], action[1] )
-            copyNetwork.stateIndex -= 1
-            bestAction = action if rew > reward else bestAction  # Save best action
+        for i in range(0, len(copyNetwork.actions)):
+            action = copyNetwork.getActionFromIndex(i)
+            nextStateMeas, rew, done, _ = copyNetwork.env_2bus.takeAction(action[0], action[1] )
+            copyNetwork.env_2bus.stateIndex -= 1 # increment back as takeAction() increments +1
+            rewArr.append(rew)
+            if rew > reward:
+                bestAction = action   # Save best action
+                reward = rew
         # Take best action in actual environment
         currentStateMeasurements, reward, done, measAfterAction = self.env_2bus.takeAction(bestAction[0], bestAction[1])
         busVoltage = measAfterAction[0]
         lp_max = measAfterAction[1]
         lp_std = measAfterAction[2]
+        print(' max-min rewArr: ', max(rewArr), min(rewArr))
         return currentStateMeasurements, busVoltage, lp_max, lp_std, reward
 
     def comparePerformance(self, steps, oper_upd_interval, bus_index_shunt, bus_index_voltage, line_index,testAllActionsFlag):
