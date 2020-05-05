@@ -1,9 +1,7 @@
-from collections import deque
-
+from memory import BasicBuffer
 from DQN_Model import ieee2_net,ieee4_net
 import torch.nn as nn
 from torch.autograd import Variable
-import torch.nn.functional as F
 from setup import powerGrid_ieee2
 import numpy as np
 import torch
@@ -12,39 +10,7 @@ import matplotlib.pyplot as plt
 import copy
 import statistics as stat
 from torch.utils.tensorboard import SummaryWriter
-from random import sample
 
-class BasicBuffer:
-    def __init__(self, max_size):
-        self.max_size = max_size
-        self.buffer = deque(maxlen=max_size)
-
-    def push(self, state, action, reward, next_state, done):
-        experience = [state.flatten() , action, reward, next_state.flatten() , done]
-        #print(experience)
-        self.buffer.append(experience)
-
-    def sample(self, batch_size):
-        state_batch = []
-        action_batch = []
-        reward_batch = []
-        next_state_batch = []
-        done_batch = []
-
-        batch =sample(self.buffer, batch_size)
-        #print(np.array(batch))
-        for experience in batch:
-            state, action, reward, next_state, done = experience
-            state_batch.append(state)
-            action_batch.append(action)
-            reward_batch.append(reward)
-            next_state_batch.append(next_state)
-            done_batch.append(done)
-        #print(batch[:,1])
-        return (state_batch, action_batch, reward_batch, next_state_batch, done_batch)
-
-    def __len__(self):
-        return len(self.buffer)
 
 class DQN:
     def __init__(self, ieeeBusSystem, lr, memorySize, batchSize,  decayRate, numOfEpisodes, stepsPerEpisode, epsilon, annealingConstant, annealAfter, targetUpdateAfter,expandActions=False,ddqnMode=False):
