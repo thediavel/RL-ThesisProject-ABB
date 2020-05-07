@@ -69,7 +69,7 @@ class TD3:
     def __init__(self, ieeeBusSystem, lr, memorySize, batchSize,  decayRate, numOfEpisodes, stepsPerEpisode,tau,policy_noise,policy_freq,noise_clip):
         prefix='td3'
         self.env_2bus = powerGrid_ieee2('td3');
-        self.max_actions=[160,1.25]
+        self.max_actions=[150,1.1]
         self.actor = Actor(24, 2)
         self.actor_target = copy.deepcopy(self.actor)
         self.actor_optimizer = torch.optim.Adam(self.actor.parameters(), lr=lr)
@@ -188,6 +188,11 @@ class TD3:
             # print(currentState);
             for j in range(0, self.numOfSteps):
                 action=self.select_action(currentState)
+                s = np.random.normal(0, 0.1,2)
+                #print(s[0])
+                action[0]=max(0,min(1,action[0]+s[0]))
+                action[1]=max(0,min(1,action[1]+s[1]))
+
                 #print(action)
                 currentMeasurements, reward, done, _ = self.env_2bus.takeAction(action[0]*self.max_actions[0], action[1]*self.max_actions[1]);
                 oldState = currentState;
@@ -218,7 +223,6 @@ class TD3:
                 }, self.checkPoint)
         print('training finished')
 
-
     def learn(self):
         self.learn_step_counter += 1
 
@@ -229,13 +233,19 @@ class TD3:
         done = Variable(torch.FloatTensor(done).cuda())
         next_state = Variable(torch.FloatTensor(next_state).cuda())
         reward=Variable(torch.FloatTensor(reward).cuda())
+        #print(action.shape)
         with torch.no_grad():
             # Select action according to policy and add clipped noise
             #print(torch.randn_like(action))
-            noise = (
-                    torch.randn_like(action) * self.policy_noise
-            ).clamp(-self.noise_clip, self.noise_clip)
+            #noise = (
+            #        torch.randn_like(action) * self.policy_noise
+            #).clamp(-self.noise_clip, self.noise_clip)
+
+            n = torch.distributions.Normal(torch.tensor([0.0]), torch.tensor([0.2]))
+            noise=n.sample(action.shape).clamp(-self.noise_clip, self.noise_clip).squeeze(2).cuda()
             #print(next_state)
+            #print(noise.shape)
+            #print(self.actor_target(next_state).shape)
             #print(self.actor_target(next_state))
             next_action = (
                     self.actor_target(next_state) + noise

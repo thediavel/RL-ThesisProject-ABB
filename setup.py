@@ -571,7 +571,7 @@ class powerGrid_ieee2:
                 print('Unstable environment settings');
                 # print(stateAfterEnvChange)
                 # print(stateAfterAction)
-                # print(lp_ref,v_ref_pu)
+                print(lp_ref,v_ref_pu)
                 # print(dummyRes)
                 # print(self.net.load.p_mw[0],self.net.load.q_mvar[0]);
                 networkFailure = True;
