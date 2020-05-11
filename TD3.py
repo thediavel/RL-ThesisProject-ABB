@@ -8,6 +8,11 @@ import os
 from torch.utils.tensorboard import SummaryWriter
 from setup import powerGrid_ieee2
 from torch.autograd import Variable
+import statistics as stat
+import matplotlib.pyplot as plt
+import math
+
+
 
 
 class Actor(nn.Module):
@@ -66,14 +71,14 @@ class Critic(nn.Module):
         return q1
 
 class TD3:
-    def __init__(self, ieeeBusSystem, lr, memorySize, batchSize,  decayRate, numOfEpisodes, stepsPerEpisode,tau,policy_noise,policy_freq,noise_clip):
+    def __init__(self, ieeeBusSystem, lr, memorySize, batchSize,  decayRate, numOfEpisodes, stepsPerEpisode,tau,policy_freq,updateAfter):
         prefix='td3'
         self.env_2bus = powerGrid_ieee2('td3');
         self.max_actions=[150,1.1]
         self.actor = Actor(24, 2)
         self.actor_target = copy.deepcopy(self.actor)
         self.actor_optimizer = torch.optim.Adam(self.actor.parameters(), lr=lr)
-
+        self.UpdateAfter=updateAfter
         self.critic = Critic(24, 2)
         self.critic_target = copy.deepcopy(self.critic)
         self.critic_optimizer = torch.optim.Adam(self.critic.parameters(), lr=lr)
@@ -97,7 +102,7 @@ class TD3:
         self.allRewards = [];
         self.fileName = prefix + '_lr' + str(lr) +  'bs' + str(batchSize) + 'ms' + str(
             memorySize) + 'dr' + str(decayRate) + 'noe' + str(
-            numOfEpisodes) + 'spe' + str(stepsPerEpisode)+'pf'+str(policy_freq)+'tau'+str(tau);
+            numOfEpisodes) + 'spe' + str(stepsPerEpisode)+'pf'+str(policy_freq)+'tau'+str(tau)+'ua'+str(self.UpdateAfter);
         self.checkPoint = 'TD3_Checkpoints/' + self.fileName + '.tar';
         print(self.checkPoint)
         if os.path.isfile(self.checkPoint):
@@ -135,8 +140,8 @@ class TD3:
         #self.max_action = max_action
         #self.discount = discount
         self.tau = tau
-        self.policy_noise = policy_noise
-        self.noise_clip = noise_clip
+        self.policy_noise = 0.05
+        #self.noise_clip = noise_clip
         self.policy_freq = policy_freq
         self.total_it = 0
 
@@ -188,13 +193,13 @@ class TD3:
             # print(currentState);
             for j in range(0, self.numOfSteps):
                 action=self.select_action(currentState)
-                s = np.random.normal(0, 0.1,2)
+                noise0 = np.random.normal(0, 0.025*self.max_actions[0],1)
+                noise1 = np.random.normal(0, 0.025*self.max_actions[1], 1)
                 #print(s[0])
-                action[0]=max(0,min(1,action[0]+s[0]))
-                action[1]=max(0,min(1,action[1]+s[1]))
-
+                action[0]=max(0,min(self.max_actions[0],action[0]*self.max_actions[0]+noise0[0]))
+                action[1]=max(0,min(self.max_actions[1],action[1]*self.max_actions[1]+noise1[0]))
                 #print(action)
-                currentMeasurements, reward, done, _ = self.env_2bus.takeAction(action[0]*self.max_actions[0], action[1]*self.max_actions[1]);
+                currentMeasurements, reward, done, _ = self.env_2bus.takeAction(action[0], action[1]);
                 oldState = currentState;
                 currentState = np.append(currentState, [currentMeasurements], axis=0)
                 currentState = np.delete(currentState, 0, axis=0);
@@ -225,84 +230,393 @@ class TD3:
 
     def learn(self):
         self.learn_step_counter += 1
+        if self.learn_step_counter%self.UpdateAfter==1:
+            # Sample replay buffer
+            state, action, reward,next_state, done = self.memory.sample(self.batch_size)
+            state = Variable(torch.FloatTensor(state).cuda())
+            action = Variable(torch.FloatTensor(action).cuda())
+            done = Variable(torch.FloatTensor(done).cuda())
+            next_state = Variable(torch.FloatTensor(next_state).cuda())
+            reward=Variable(torch.FloatTensor(reward).cuda())
+            #print(action.shape)
+            with torch.no_grad():
+                # Select action according to policy and add clipped noise
+                #print(torch.randn_like(action))
+                #noise = (
+                #        torch.randn_like(action) * self.policy_noise
+                #).clamp(-self.noise_clip, self.noise_clip)
 
-        # Sample replay buffer
-        state, action, reward,next_state, done = self.memory.sample(self.batch_size)
-        state = Variable(torch.FloatTensor(state).cuda())
-        action = Variable(torch.FloatTensor(action).cuda())
-        done = Variable(torch.FloatTensor(done).cuda())
-        next_state = Variable(torch.FloatTensor(next_state).cuda())
-        reward=Variable(torch.FloatTensor(reward).cuda())
-        #print(action.shape)
-        with torch.no_grad():
-            # Select action according to policy and add clipped noise
-            #print(torch.randn_like(action))
-            #noise = (
-            #        torch.randn_like(action) * self.policy_noise
-            #).clamp(-self.noise_clip, self.noise_clip)
+                n0 = torch.distributions.Normal(torch.tensor([0.0]), torch.tensor([self.policy_noise*self.max_actions[0]]))
+                n1 = torch.distributions.Normal(torch.tensor([0.0]), torch.tensor([self.policy_noise*self.max_actions[1]]))
 
-            n = torch.distributions.Normal(torch.tensor([0.0]), torch.tensor([0.2]))
-            noise=n.sample(action.shape).clamp(-self.noise_clip, self.noise_clip).squeeze(2).cuda()
-            #print(next_state)
-            #print(noise.shape)
-            #print(self.actor_target(next_state).shape)
-            #print(self.actor_target(next_state))
-            next_action = (
-                    self.actor_target(next_state) + noise
-            ).clamp(0, 1)
+                #noise0=n0.sample((64,)).clamp(-8, 8).squeeze(1).cuda()
+                #noise1=n1.sample((64,)).clamp(-0.05, 0.05).squeeze(1).cuda()
+                noise0 = n0.sample((self.batch_size,)).clamp(-8, 8).cuda()
+                noise1 = n1.sample((self.batch_size,)).clamp(-0.05, 0.05).cuda()
 
-            # Compute the target Q value
-            target_Q1, target_Q2 = self.critic_target(next_state, next_action)
-            target_Q = torch.min(target_Q1, target_Q2)
-            #print((target_Q*done.unsqueeze(1)).shape)
-            target_Q = reward.unsqueeze(1) + self.decayRate * (target_Q * done.unsqueeze(1))
+                #print(noise0)
+                noise=torch.stack([noise0,noise1],dim=1).squeeze(2)
+                #print(noise.shape)
+                #print(noise.shape)
+                #print(self.actor_target(next_state).shape)
+                #print(self.actor_target(next_state))
+                next_action = (
+                        self.actor_target(next_state)*torch.tensor(self.max_actions).cuda() + noise
+                )
+                #print(next_action)
+                # Compute the target Q value
+                target_Q1, target_Q2 = self.critic_target(next_state, next_action)
+                target_Q = torch.min(target_Q1, target_Q2)
+                #print((target_Q*done.unsqueeze(1)).shape)
+                target_Q = reward.unsqueeze(1) + self.decayRate * (target_Q * done.unsqueeze(1))
 
-        # Get current Q estimates
-        current_Q1, current_Q2 = self.critic(state, action)
+            # Get current Q estimates
+            current_Q1, current_Q2 = self.critic(state, action)
 
-        # Compute critic loss
-        #print(current_Q1.shape)
-        #print(target_Q.shape)
-        critic_loss = F.mse_loss(current_Q1, target_Q) + F.mse_loss(current_Q2, target_Q)
+            # Compute critic loss
+            #print(current_Q1.shape)
+            #print(target_Q.shape)
+            critic_loss = F.mse_loss(current_Q1, target_Q) + F.mse_loss(current_Q2, target_Q)
 
-        # Optimize the critic
-        self.critic_optimizer.zero_grad()
-        critic_loss.backward()
-        self.critic_optimizer.step()
+            # Optimize the critic
+            self.critic_optimizer.zero_grad()
+            critic_loss.backward()
+            self.critic_optimizer.step()
 
-        self.runningCriticLoss += critic_loss.item()
-        self.runningRewards += torch.sum(reward).item() / self.batch_size
-        # Delayed policy updates
-        if self.learn_step_counter % self.policy_freq == 0:
+            self.runningCriticLoss += critic_loss.item()
+            self.runningRewards += torch.sum(reward).item() / self.batch_size
+            # Delayed policy updates
+            if self.learn_step_counter % (self.policy_freq*self.UpdateAfter) == 1:
 
-            # Compute actor losse
-            actor_loss = -self.critic.Q1(state, self.actor(state)).mean()
+                # Compute actor losse
+                actor_loss = -self.critic.Q1(state, self.actor(state)).mean()
 
-            # Optimize the actor
-            self.actor_optimizer.zero_grad()
-            actor_loss.backward()
-            self.actor_optimizer.step()
-            self.runningActorLoss += actor_loss.item()
+                # Optimize the actor
+                self.actor_optimizer.zero_grad()
+                actor_loss.backward()
+                self.actor_optimizer.step()
+                self.runningActorLoss += actor_loss.item()
 
-            # Update the frozen target models
-            for param, target_param in zip(self.critic.parameters(), self.critic_target.parameters()):
-                target_param.data.copy_(self.tau * param.data + (1 - self.tau) * target_param.data)
+                # Update the frozen target models
+                for param, target_param in zip(self.critic.parameters(), self.critic_target.parameters()):
+                    target_param.data.copy_(self.tau * param.data + (1 - self.tau) * target_param.data)
 
-            for param, target_param in zip(self.actor.parameters(), self.actor_target.parameters()):
-                target_param.data.copy_(self.tau * param.data + (1 - self.tau) * target_param.data)
+                for param, target_param in zip(self.actor.parameters(), self.actor_target.parameters()):
+                    target_param.data.copy_(self.tau * param.data + (1 - self.tau) * target_param.data)
 
-        if self.learn_step_counter % 50 == 0:  # every 200 mini-batches...
+            if self.learn_step_counter % (self.UpdateAfter*10) == 1:  # every 200 mini-batches...
 
-            # ...log the running loss
-            self.writer.add_scalar('training loss- Critic',
-                              self.runningCriticLoss / 50,
-                              self.learn_step_counter)
-            self.writer.add_scalar('training loss- Actor',
-                                   self.runningActorLoss / 50,
-                                   self.learn_step_counter)
-            self.writer.add_scalar('avg Reward',
-                                   self.runningRewards/50,
-                                   self.learn_step_counter)
-            self.runningRewards = 0;
-            self.runningCriticLoss=0;
-            self.runningActorLoss = 0;
+                # ...log the running loss
+                self.writer.add_scalar('training loss- Critic',
+                                  self.runningCriticLoss / 10,
+                                  self.learn_step_counter/self.UpdateAfter +1)
+                self.writer.add_scalar('training loss- Actor',
+                                       self.runningActorLoss / 10,
+                                       self.learn_step_counter/self.UpdateAfter +1)
+                self.writer.add_scalar('avg Reward',
+                                       self.runningRewards/10,
+                                       self.learn_step_counter/self.UpdateAfter +1)
+                self.runningRewards = 0;
+                self.runningCriticLoss=0;
+                self.runningActorLoss = 0;
+
+    def lp_ref(self):
+        return stat.mean(self.env_2bus.net.res_line.loading_percent)
+
+    def runFACTSnoRL(self, v_ref, lp_ref, bus_index_shunt, bus_index_voltage, line_index, series_comp_enabl):
+        # Enable/Disable devices
+        self.env_2bus.net.switch.at[1, 'closed'] = False if series_comp_enabl else True
+        self.env_2bus.net.switch.at[0, 'closed'] = True
+        self.env_2bus.net.controller.in_service[1] = True if series_comp_enabl else False
+
+        # Set reference values
+        self.env_2bus.shuntControl.ref = v_ref;
+        self.env_2bus.seriesControl.ref = lp_ref;
+        self.env_2bus.runEnv(runControl=True)
+        busVoltage = self.env_2bus.net.res_bus.vm_pu[bus_index_voltage]
+        lp_max = max(self.env_2bus.net.res_line.loading_percent)
+        lp_std = np.std(self.env_2bus.net.res_line.loading_percent)
+        return busVoltage, lp_max, lp_std
+
+    ## Run the environment controlled by greedy RL
+    def runFACTSgreedyRL(self, busVoltageIndex, currentState,takeLastAction):
+        action=self.select_action(currentState)
+        nextStateMeasurements, reward, done, measAfterAction = self.env_2bus.takeAction(action[0]*self.max_actions[0], action[1]*self.max_actions[1])
+        busVoltage = measAfterAction[0]
+        lp_max = measAfterAction[1]
+        lp_std = measAfterAction[2]
+        return nextStateMeasurements, busVoltage, lp_max, lp_std
+
+    ## Run environment and try all actions and choose highest reward
+    def runFACTSallActionsRL(self, busVoltageIndex):
+        copyNetwork = copy.deepcopy(self)
+        reward = 0
+        bestAction = []
+        rewArr = []
+
+        #Create action space with high resolution:
+        copyNetwork.actionSpace = {'v_ref_pu': [i/1000 for i in range(900, 1101)], 'lp_ref': [i for i in range(0, 151)]}
+        copyNetwork.actions = ['v_ref:' + str(x) + ';lp_ref:' + str(y) for x in copyNetwork.actionSpace['v_ref_pu']
+                        for y in copyNetwork.actionSpace['lp_ref']]
+
+        # Test all actions
+        for i in range(0, len(copyNetwork.actions)):
+            action = copyNetwork.getActionFromIndex(i)
+            nextStateMeas, rew, done, _ = copyNetwork.env_2bus.takeAction(action[0], action[1] )
+            copyNetwork.env_2bus.stateIndex -= 1 # increment back as takeAction() increments +1
+            rewArr.append(rew)
+            if rew > reward:
+                bestAction = action   # Save best action
+                reward = rew
+        # Take best action in actual environment
+        currentStateMeasurements, reward, done, measAfterAction = self.env_2bus.takeAction(bestAction[0], bestAction[1])
+        busVoltage = measAfterAction[0]
+        lp_max = measAfterAction[1]
+        lp_std = measAfterAction[2]
+        print(' max-min rewArr: ', max(rewArr), min(rewArr))
+        return currentStateMeasurements, busVoltage, lp_max, lp_std, reward
+
+    def comparePerformance(self, steps, oper_upd_interval, bus_index_shunt, bus_index_voltage, line_index,testAllActionsFlag):
+        v_noFACTS = []
+        lp_max_noFACTS = []
+        lp_std_noFACTS = []
+        v_FACTS = []
+        lp_max_FACTS = []
+        lp_std_FACTS = []
+        v_RLFACTS = []
+        lp_max_RLFACTS = []
+        lp_std_RLFACTS = []
+        v_FACTS_noSeries = []
+        lp_max_FACTS_noSeries = []
+        lp_std_FACTS_noSeries = []
+        v_RLFACTS_allAct = []
+        lp_max_RLFACTS_allAct = []
+        lp_std_RLFACTS_allAct = []
+        v_FACTS_eachTS = []
+        lp_max_FACTS_eachTS = []
+        lp_std_FACTS_eachTS = []
+        rewardNoFacts=[]
+        rewardFacts=[]
+        rewardFactsEachTS=[]
+        rewardFactsNoSeries=[]
+        rewardFactsRL=[]
+        rewardFactsAllActions=[]
+        self.env_2bus.setMode('test')
+        self.env_2bus.reset()
+        stateIndex = self.env_2bus.stateIndex
+        loadProfile = self.env_2bus.loadProfile
+        while stateIndex + steps+4 > len(loadProfile):
+            self.env_2bus.reset()  # Reset to get sufficient number of steps left in time series
+            stateIndex = self.env_2bus.stateIndex
+            loadProfile = self.env_2bus.loadProfile
+
+        # Create copy of network for historic measurements
+        temp = copy.deepcopy(self)
+        #temp.eval_net.eval()
+
+        #Run for history measurements to get full state repr for RL.
+        currentState = [];
+        for j in range(0, 3):
+            m = temp.env_2bus.getCurrentStateForDQN();
+            m.extend(m) # creates the 2nd part of the state, "after action" but was no action with RL disabled in this part.
+            currentState.append(m);
+            temp.env_2bus.stateIndex += 1;
+            temp.env_2bus.scaleLoadAndPowerValue(temp.env_2bus.stateIndex)
+            temp.env_2bus.runEnv(False);
+        currentState.append(self.env_2bus.getCurrentStateForDQN())
+        currentState[3].extend(self.env_2bus.getCurrentStateForDQN())
+        currentState = np.array(currentState) # Only used for RLFACTS case
+
+        # Need seperate copy for each scenario
+        qObj_env_noFACTS = copy.deepcopy(temp)
+        qObj_env_FACTS = copy.deepcopy(temp)
+        qObj_env_RLFACTS = copy.deepcopy(temp)
+        qObj_env_FACTS_noSeries = copy.deepcopy(temp)
+        qObj_env_FACTS_eachTS = copy.deepcopy(temp)
+        if testAllActionsFlag:
+            qObj_env_RLFACTS_allAct = copy.deepcopy(temp)
+
+        # Make sure FACTS devices disabled for noFACTS case and no Series for that case
+        qObj_env_noFACTS.env_2bus.net.switch.at[0, 'closed'] = False
+        qObj_env_noFACTS.env_2bus.net.switch.at[1, 'closed'] = True
+        qObj_env_FACTS_noSeries.env_2bus.net.switch.at[1, 'closed'] = True
+
+        # To plot horizontal axis in nose-curve
+        load_nom_pu = 2 #the nominal IEEE load in pu
+        loading_arr = list(load_nom_pu*(loadProfile[stateIndex:stateIndex + steps] / stat.mean(loadProfile)))
+
+        # Loop through each load
+        for i in range(0, steps):
+            # no FACTS
+            qObj_env_noFACTS.env_2bus.runEnv(runControl=False) #No FACTS, no control
+            v_noFACTS.append(qObj_env_noFACTS.env_2bus.net.res_bus.vm_pu[bus_index_voltage])
+            lp_max_noFACTS.append(max(qObj_env_noFACTS.env_2bus.net.res_line.loading_percent))
+            lp_std_noFACTS.append(np.std(qObj_env_noFACTS.env_2bus.net.res_line.loading_percent))
+            rewardNoFacts.append((200+(math.exp(abs(1 - qObj_env_noFACTS.env_2bus.net.res_bus.vm_pu[bus_index_voltage]) * 10) * -20) - np.std(qObj_env_noFACTS.env_2bus.net.res_line.loading_percent))/200)
+
+
+            v_ref = 1
+            if i % oper_upd_interval == 0:
+                lp_reference = qObj_env_FACTS.lp_ref()
+                #print('oper', lp_reference)
+            voltage, lp_max, lp_std = qObj_env_FACTS.runFACTSnoRL(v_ref, lp_reference, bus_index_shunt, bus_index_voltage,
+                                           line_index, True)  # Series compensation enabled
+            v_FACTS.append(voltage)
+            lp_max_FACTS.append(lp_max)
+            lp_std_FACTS.append(lp_std)
+            rewardFacts.append((200+(math.exp(abs(1 - voltage) * 10) * -20) - lp_std)/200  )
+
+
+            # FACTS no Series compensation
+            voltage, lp_max, lp_std = qObj_env_FACTS_noSeries.runFACTSnoRL(v_ref, lp_reference, bus_index_shunt, bus_index_voltage,
+                                                          line_index, False)  # Series compensation disabled
+            v_FACTS_noSeries.append(voltage)
+            lp_max_FACTS_noSeries.append(lp_max)
+            lp_std_FACTS_noSeries.append(lp_std)
+            rewardFactsNoSeries.append((200+(math.exp(abs(1 - voltage) * 10) * -20) - lp_std)/200  )
+
+            # FACTS with both series and shunt, with system operator update EACH time step
+            lp_reference_eachTS = qObj_env_FACTS_eachTS.lp_ref()
+            #print('eachTS', lp_reference_eachTS)
+            voltage, lp_max, lp_std = qObj_env_FACTS_eachTS.runFACTSnoRL(v_ref, lp_reference_eachTS, bus_index_shunt, bus_index_voltage,
+                                                          line_index, True)  # Series compensation enabled
+            v_FACTS_eachTS.append(voltage)
+            lp_max_FACTS_eachTS.append(lp_max)
+            lp_std_FACTS_eachTS.append(lp_std)
+            rewardFactsEachTS.append((200+(math.exp(abs(1 - voltage) * 10) * -20) - lp_std)/200  )             # FACTS with both series and shunt
+
+            # RLFACTS
+            takeLastAction=False;
+            qObj_env_RLFACTS.actor.eval();
+            currentMeasurements, voltage, lp_max, lp_std = qObj_env_RLFACTS.runFACTSgreedyRL(bus_index_voltage, currentState, takeLastAction)  # runpp is done within this function
+            currentState = np.append(currentState, [currentMeasurements], axis=0)
+            currentState = np.delete(currentState, 0, axis=0);
+
+            v_RLFACTS.append(voltage)
+            lp_max_RLFACTS.append(lp_max)
+            lp_std_RLFACTS.append(lp_std)
+
+            rewardFactsRL.append((200+(math.exp(abs(1 - voltage) * 10) * -20) - lp_std)/200  )          # FACTS with both series and shunt
+
+            if testAllActionsFlag:
+            # RL All actions
+                currentState_RLAllAct, voltage, lp_max, lp_std, _ = qObj_env_RLFACTS_allAct.runFACTSallActionsRL(bus_index_voltage)
+                v_RLFACTS_allAct.append(voltage)
+                lp_max_RLFACTS_allAct.append(lp_max)
+                lp_std_RLFACTS_allAct.append(lp_std)
+                rewardFactsAllActions.append((200+(math.exp(abs(1 - voltage) * 10) * -20) - lp_std)/200  )    # FACTS with both series and shunt
+
+            # Increment state
+            stateIndex += 1
+            qObj_env_noFACTS.env_2bus.scaleLoadAndPowerValue(stateIndex) #Only for these, rest are incremented within their respective functions
+            qObj_env_FACTS.env_2bus.scaleLoadAndPowerValue(stateIndex)
+            qObj_env_FACTS_noSeries.env_2bus.scaleLoadAndPowerValue(stateIndex)
+            qObj_env_FACTS_eachTS.env_2bus.scaleLoadAndPowerValue(stateIndex)
+
+
+
+        # Make plots
+        i_list = list(range(1, steps+1))
+        fig, ax1 = plt.subplots()
+        color = 'tab:blue'
+        ax1.set_title('Voltage and line loading standard deviation for an episode')
+        ax1.set_xlabel('Time series')
+        ax1.set_ylabel('Bus Voltage', color=color)
+        ax1.plot(i_list, v_noFACTS, color=color)
+        ax1.plot(i_list, v_FACTS, color='g')
+        ax1.plot(i_list, v_FACTS_noSeries, color='k')
+        ax1.plot(i_list, v_RLFACTS, color='r')
+        ax1.plot(i_list, v_FACTS_eachTS, color= 'c')
+        if testAllActionsFlag:
+         ax1.plot(i_list, v_RLFACTS_allAct, color='y')
+
+        ax1.legend(['v no facts', 'v facts' , 'v facts no series comp','v RL facts', 'v RL facts upd each ts', 'v RL all act.'], loc=2)
+        ax2 = ax1.twinx()
+
+        color = 'tab:blue'
+        ax2.set_ylabel('line loading percentage std [% units]', color='m')
+        ax2.plot(i_list, lp_std_noFACTS, color=color, linestyle = 'dashed')
+        ax2.plot(i_list, lp_std_FACTS, color='g',linestyle = 'dashed')
+        ax2.plot(i_list, lp_std_FACTS_noSeries, color='k', linestyle = 'dashed')
+        ax2.plot(i_list, lp_std_RLFACTS, color='r', linestyle = 'dashed')
+        ax2.plot(i_list, lp_std_FACTS_eachTS, color='c', linestyle = 'dashed')
+        if testAllActionsFlag:
+            ax2.plot(i_list, lp_std_RLFACTS_allAct, color='y', linestyle='dashed')
+        ax2.legend(['std lp no facts', 'std lp facts', 'std lp facts no series comp', 'std lp RL facts', 'std lp facts each ts', 'std lp RL all act.' ], loc=1)
+        plt.show()
+
+        # Nosecurve:
+        loading_arr_sorted = sorted(loading_arr)
+        print(loading_arr_sorted)
+        v_noFACTS_sorted = [x for _, x in sorted(zip(loading_arr, v_noFACTS))]
+        lp_max_noFACTS_sorted = [x for _, x in sorted(zip(loading_arr, lp_max_noFACTS))]
+        v_FACTS_sorted = [x for _, x in sorted(zip(loading_arr, v_FACTS))]
+        lp_max_FACTS_sorted = [x for _, x in sorted(zip(loading_arr, lp_max_FACTS))]
+        v_RLFACTS_sorted = [x for _, x in sorted(zip(loading_arr, v_RLFACTS))]
+        lp_max_RLFACTS_sorted = [x for _, x in sorted(zip(loading_arr, lp_max_RLFACTS))]
+        v_FACTS_noSeries_sorted = [x for _, x in sorted(zip(loading_arr, v_FACTS_noSeries))]
+        lp_max_FACTS_noSeries_sorted = [x for _, x in sorted(zip(loading_arr, lp_max_FACTS_noSeries))]
+        v_FACTS_eachTS_sorted = [x for _, x in sorted(zip(loading_arr, v_FACTS_eachTS))]
+        lp_max_FACTS_eachTS_sorted = [x for _, x in sorted(zip(loading_arr, lp_max_FACTS_eachTS))]
+        if testAllActionsFlag:
+            v_RLFACTS_allAct_sorted = [x for _, x in sorted(zip(loading_arr, v_RLFACTS_allAct))]
+            lp_max_RLFACTS_allAct_sorted = [x for _, x in sorted(zip(loading_arr, lp_max_RLFACTS_allAct))]
+
+        #Trim arrays to only include values <= 100 % loading percentage
+        lp_limit_for_noseCurve = 120
+        lp_max_noFACTS_sorted_trim = [x for x in lp_max_noFACTS_sorted if x <= lp_limit_for_noseCurve]
+        lp_max_FACTS_sorted_trim = [x for x in lp_max_FACTS_sorted if x <= lp_limit_for_noseCurve]
+        lp_max_RLFACTS_sorted_trim = [x for x in lp_max_RLFACTS_sorted if x <= lp_limit_for_noseCurve]
+        lp_max_FACTS_noSeries_sorted_trim = [x for x in lp_max_FACTS_noSeries_sorted if x <= lp_limit_for_noseCurve]
+        lp_max_FACTS_eachTS_sorted_trim = [x for x in lp_max_FACTS_eachTS_sorted if x <= lp_limit_for_noseCurve]
+        if testAllActionsFlag:
+            lp_max_RLFACTS_allAct_sorted_trim = [x for x in lp_max_RLFACTS_allAct_sorted if x <= lp_limit_for_noseCurve]
+
+        v_noFACTS_sorted_trim = v_noFACTS_sorted[0:len(lp_max_noFACTS_sorted_trim)]
+        v_FACTS_sorted_trim = v_FACTS_sorted[0:len(lp_max_FACTS_sorted_trim)]
+        v_RLFACTS_sorted_trim = v_RLFACTS_sorted[0:len(lp_max_RLFACTS_sorted_trim)]
+        v_FACTS_noSeries_sorted_trim = v_FACTS_noSeries_sorted[0:len(lp_max_FACTS_noSeries_sorted_trim)]
+        v_FACTS_eachTS_sorted_trim = v_FACTS_eachTS_sorted[0:len(lp_max_FACTS_eachTS_sorted_trim)]
+        if testAllActionsFlag:
+            v_RLFACTS_allAct_sorted_trim = v_RLFACTS_allAct_sorted[0:len(lp_max_RLFACTS_allAct_sorted_trim)]
+
+        loading_arr_plot_noFACTS = loading_arr_sorted[0:len(lp_max_noFACTS_sorted_trim)]
+        loading_arr_plot_FACTS = loading_arr_sorted[0:len(lp_max_FACTS_sorted_trim)]
+        loading_arr_plot_RLFACTS = loading_arr_sorted[0:len(lp_max_RLFACTS_sorted_trim)]
+        loading_arr_plot_FACTS_noSeries = loading_arr_sorted[0:len(lp_max_FACTS_noSeries_sorted_trim)]
+        loading_arr_plot_FACTS_eachTS = loading_arr_sorted[0:len(lp_max_FACTS_eachTS_sorted_trim)]
+        if testAllActionsFlag:
+            loading_arr_plot_RLFACTS_allAct = loading_arr_sorted[0:len(lp_max_RLFACTS_allAct_sorted_trim)]
+
+        #Plot Rewards
+        fig2 = plt.figure()
+        color = 'tab:blue'
+        plt.plot(i_list, rewardNoFacts, Figure=fig2, color=color)
+        plt.plot(i_list, rewardFacts, Figure=fig2, color='g')
+        plt.plot(i_list, rewardFactsNoSeries, Figure=fig2, color='k')
+        plt.plot(i_list, rewardFactsRL, Figure=fig2, color='r')
+        plt.plot(i_list, rewardFactsEachTS, Figure=fig2, color='c')
+        if testAllActionsFlag:
+            plt.plot(i_list, rewardFactsAllActions, Figure=fig2, color='y')
+        plt.title('Rewards as per Environment Setup')
+        plt.xlabel('TimeStep',  Figure=fig2)
+        plt.ylabel('Reward',  Figure=fig2, color=color)
+        plt.legend(['no FACTS', 'FACTS', 'FACTS no series comp','RL FACTS', 'FACTS each ts', 'RL FACTS all act.'], loc=1)
+        plt.show()
+
+
+        #Plot Nose Curve
+        fig3 = plt.figure()
+        color = 'tab:blue'
+        plt.plot(loading_arr_plot_noFACTS, v_noFACTS_sorted_trim, Figure=fig3, color=color)
+        plt.plot(loading_arr_plot_FACTS, v_FACTS_sorted_trim, Figure=fig3, color='g')
+        plt.plot(loading_arr_plot_FACTS_noSeries, v_FACTS_noSeries_sorted_trim, Figure=fig3, color='k')
+        plt.plot(loading_arr_plot_RLFACTS, v_RLFACTS_sorted_trim, Figure=fig3, color='r')
+        plt.plot(loading_arr_plot_FACTS_eachTS, v_FACTS_eachTS_sorted_trim, Figure=fig3, color='c')
+        if testAllActionsFlag:
+            plt.plot(loading_arr_plot_RLFACTS_allAct, v_RLFACTS_allAct_sorted_trim, Figure=fig3, color='y')
+        plt.title('Nose curve from episode with sorted voltage levels')
+        plt.xlabel('Loading [p.u.]',  Figure=fig3)
+        plt.ylabel('Bus Voltage [p.u.]',  Figure=fig3, color=color)
+        plt.legend(['v no FACTS', 'v FACTS', 'v FACTS no series comp','v RL FACTS', 'v FACTS each ts', 'v RL FACTS all act.'], loc=1)
+        plt.show()

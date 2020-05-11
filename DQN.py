@@ -409,7 +409,12 @@ class DQN:
         v_FACTS_eachTS = []
         lp_max_FACTS_eachTS = []
         lp_std_FACTS_eachTS = []
-
+        rewardNoFacts = []
+        rewardFacts = []
+        rewardFactsEachTS = []
+        rewardFactsNoSeries = []
+        rewardFactsRL = []
+        rewardFactsAllActions = []
         self.env_2bus.setMode('test')
         self.env_2bus.reset()
         stateIndex = self.env_2bus.stateIndex
@@ -461,6 +466,7 @@ class DQN:
             v_noFACTS.append(qObj_env_noFACTS.env_2bus.net.res_bus.vm_pu[bus_index_voltage])
             lp_max_noFACTS.append(max(qObj_env_noFACTS.env_2bus.net.res_line.loading_percent))
             lp_std_noFACTS.append(np.std(qObj_env_noFACTS.env_2bus.net.res_line.loading_percent))
+            rewardNoFacts.append((200+(math.exp(abs(1 - qObj_env_noFACTS.env_2bus.net.res_bus.vm_pu[bus_index_voltage]) * 10) * -20) - np.std(qObj_env_noFACTS.env_2bus.net.res_line.loading_percent))/200)
 
             # FACTS with both series and shunt
             v_ref = 1
@@ -472,6 +478,7 @@ class DQN:
             v_FACTS.append(voltage)
             lp_max_FACTS.append(lp_max)
             lp_std_FACTS.append(lp_std)
+            rewardFacts.append((200+(math.exp(abs(1 - voltage) * 10) * -20) - lp_std)/200  )
 
             # FACTS no Series compensation
             voltage, lp_max, lp_std = qObj_env_FACTS_noSeries.runFACTSnoRL(v_ref, lp_reference, bus_index_shunt, bus_index_voltage,
@@ -479,6 +486,7 @@ class DQN:
             v_FACTS_noSeries.append(voltage)
             lp_max_FACTS_noSeries.append(lp_max)
             lp_std_FACTS_noSeries.append(lp_std)
+            rewardFactsNoSeries.append((200+(math.exp(abs(1 - voltage) * 10) * -20) - lp_std)/200  )
 
             # FACTS with both series and shunt, with system operator update EACH time step
             lp_reference_eachTS = qObj_env_FACTS_eachTS.lp_ref()
@@ -488,6 +496,7 @@ class DQN:
             v_FACTS_eachTS.append(voltage)
             lp_max_FACTS_eachTS.append(lp_max)
             lp_std_FACTS_eachTS.append(lp_std)
+            rewardFactsEachTS.append((200+(math.exp(abs(1 - voltage) * 10) * -20) - lp_std)/200  )             # FACTS with both series and shunt
 
             # RLFACTS
             takeLastAction=False;
@@ -499,6 +508,7 @@ class DQN:
             v_RLFACTS.append(voltage)
             lp_max_RLFACTS.append(lp_max)
             lp_std_RLFACTS.append(lp_std)
+            rewardFactsRL.append((200+(math.exp(abs(1 - voltage) * 10) * -20) - lp_std)/200  )          # FACTS with both series and shunt
 
             if testAllActionsFlag:
             # RL All actions
@@ -506,6 +516,7 @@ class DQN:
                 v_RLFACTS_allAct.append(voltage)
                 lp_max_RLFACTS_allAct.append(lp_max)
                 lp_std_RLFACTS_allAct.append(lp_std)
+                rewardFactsAllActions.append((200 + (math.exp(abs(1 - voltage) * 10) * -20) - lp_std) / 200)  # FACTS with both series and shunt
 
             # Increment state
             stateIndex += 1
@@ -589,19 +600,37 @@ class DQN:
         if testAllActionsFlag:
             loading_arr_plot_RLFACTS_allAct = loading_arr_sorted[0:len(lp_max_RLFACTS_allAct_sorted_trim)]
 
-        #Plot Nose Curve
+        # Plot Rewards
         fig2 = plt.figure()
         color = 'tab:blue'
-        plt.plot(loading_arr_plot_noFACTS, v_noFACTS_sorted_trim, Figure=fig2, color=color)
-        plt.plot(loading_arr_plot_FACTS, v_FACTS_sorted_trim, Figure=fig2, color='g')
-        plt.plot(loading_arr_plot_FACTS_noSeries, v_FACTS_noSeries_sorted_trim, Figure=fig2, color='k')
-        plt.plot(loading_arr_plot_RLFACTS, v_RLFACTS_sorted_trim, Figure=fig2, color='r')
-        plt.plot(loading_arr_plot_FACTS_eachTS, v_FACTS_eachTS_sorted_trim, Figure=fig2, color='c')
+        plt.plot(i_list, rewardNoFacts, Figure=fig2, color=color)
+        plt.plot(i_list, rewardFacts, Figure=fig2, color='g')
+        plt.plot(i_list, rewardFactsNoSeries, Figure=fig2, color='k')
+        plt.plot(i_list, rewardFactsRL, Figure=fig2, color='r')
+        plt.plot(i_list, rewardFactsEachTS, Figure=fig2, color='c')
         if testAllActionsFlag:
-            plt.plot(loading_arr_plot_RLFACTS_allAct, v_RLFACTS_allAct_sorted_trim, Figure=fig2, color='y')
+            plt.plot(i_list, rewardFactsAllActions, Figure=fig2, color='y')
+        plt.title('Rewards as per Environment Setup')
+        plt.xlabel('TimeStep', Figure=fig2)
+        plt.ylabel('Reward', Figure=fig2, color=color)
+        plt.legend(['no FACTS', 'FACTS', 'FACTS no series comp', 'RL FACTS', 'FACTS each ts', 'RL FACTS all act.'],
+                   loc=1)
+        plt.show()
+
+
+        #Plot Nose Curve
+        fig3 = plt.figure()
+        color = 'tab:blue'
+        plt.plot(loading_arr_plot_noFACTS, v_noFACTS_sorted_trim, Figure=fig3, color=color)
+        plt.plot(loading_arr_plot_FACTS, v_FACTS_sorted_trim, Figure=fig3, color='g')
+        plt.plot(loading_arr_plot_FACTS_noSeries, v_FACTS_noSeries_sorted_trim, Figure=fig3, color='k')
+        plt.plot(loading_arr_plot_RLFACTS, v_RLFACTS_sorted_trim, Figure=fig3, color='r')
+        plt.plot(loading_arr_plot_FACTS_eachTS, v_FACTS_eachTS_sorted_trim, Figure=fig3, color='c')
+        if testAllActionsFlag:
+            plt.plot(loading_arr_plot_RLFACTS_allAct, v_RLFACTS_allAct_sorted_trim, Figure=fig3, color='y')
         plt.title('Nose curve from episode with sorted voltage levels')
-        plt.xlabel('Loading [p.u.]',  Figure=fig2)
-        plt.ylabel('Bus Voltage [p.u.]',  Figure=fig2, color=color)
+        plt.xlabel('Loading [p.u.]',  Figure=fig3)
+        plt.ylabel('Bus Voltage [p.u.]',  Figure=fig3, color=color)
         plt.legend(['v no FACTS', 'v FACTS', 'v FACTS no series comp','v RL FACTS', 'v FACTS each ts', 'v RL FACTS all act.'], loc=1)
         plt.show()
 
