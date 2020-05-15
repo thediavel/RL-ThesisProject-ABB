@@ -445,8 +445,8 @@ class powerGrid_ieee2:
         bus_SC2 = pp.create_bus(self.net, name='SC bus 2', vn_kv=230, type='n', geodata=(3.52, 2.05),
                                 zone=2, max_vm_pu=1.1, min_vm_pu=0.9)
         sw_SC_bypass = pp.create_switch(self.net, bus=3, element=4, et='b', type='CB', closed=True)
-        imp_SC = pp.create_impedance(self.net, from_bus=3, to_bus=4, rft_pu=0.0000001272, xft_pu=-0.0636,
-                                     rtf_pu=0.0000001272, xtf_pu=-0.0636, sn_mva=250,
+        imp_SC = pp.create_impedance(self.net, from_bus=3, to_bus=4, rft_pu=0.0000001272, xft_pu=-0.0636*0.4,
+                                     rtf_pu=0.0000001272, xtf_pu=-0.0636*0.4, sn_mva=250,
                                      in_service=True)  # Just some default values
         # Adjust orginal Line 3 to connect to new buses instead.
         self.net.line.at[1, ['length_km', 'to_bus', 'name']] = [0.5, 3, 'line1_SC']
@@ -568,12 +568,13 @@ class powerGrid_ieee2:
                 #print('rew2: ',reward2)
                 reward = 0.7 * reward1 + 0.3 * reward2;
             except:
-                print('Unstable environment settings');
-                # print(stateAfterEnvChange)
-                # print(stateAfterAction)
-                print(lp_ref,v_ref_pu)
+                print('Unstable environment settings in takeAction(). Action: ', (lp_ref, v_ref_pu), 'p_mw: ', self.net.load.p_mw[0]);
+                print('shunt, series, series switch: ', self.net.shunt.q_mvar[0], self.net.impedance.loc[0, ['xft_pu']], self.net.switch.closed[1])
+                #print(stateAfterEnvChange)
+                #print(stateAfterAction)
+                #print(lp_ref,v_ref_pu)
                 # print(dummyRes)
-                # print(self.net.load.p_mw[0],self.net.load.q_mvar[0]);
+                #print(self.net.load.p_mw[0],self.net.load.q_mvar[0]);
                 networkFailure = True;
                 reward = 0;
                 # return stateAfterAction, reward, networkFailure,stateAfterEnvChange ;
@@ -584,6 +585,56 @@ class powerGrid_ieee2:
 
         # print(reward2)
         #print('totrew: ', reward)
+        return stateAfterEnvChange, reward, done or networkFailure, measAfterAction;
+
+    ## Same as Take Action but without Try for debugging
+    def takeAction_noTry(self, lp_ref, v_ref_pu):
+        # print('taking action')
+        stateAfterAction = copy.deepcopy(self.errorState);
+        stateAfterEnvChange = copy.deepcopy(self.errorState);
+        measAfterAction = [-2, -1000, -1000]
+        self.net.switch.at[0, 'closed'] = True
+        self.net.switch.at[1, 'closed'] = False
+        if lp_ref != 'na' and v_ref_pu != 'na':
+            self.shuntControl.ref = v_ref_pu;
+            self.seriesControl.ref = lp_ref;
+        networkFailure = False
+        done = False;
+        bus_index_shunt = 1;
+        line_index = 1;
+        if self.stateIndex < min(len(self.powerProfile), len(self.loadProfile)):
+            dummyRes = (self.net.res_bus.vm_pu, self.net.res_line.loading_percent)
+            ## state = (voltage,ll,angle,p,q)
+            pp.runpp(self.net, run_control=True);
+            if self.method in ('dqn', 'ddqn', 'td3'):
+                reward1 = self.calculateReward(self.net.res_bus.vm_pu, self.net.res_line.loading_percent,
+                                               self.net.res_bus.va_degree[bus_index_shunt]);
+                stateAfterAction = self.getCurrentStateForDQN()
+            else:
+                reward1 = self.calculateReward(self.net.res_bus.vm_pu, self.net.res_line.loading_percent);
+                stateAfterAction = self.getCurrentState()
+            # print('rew1: ', reward1)
+            measAfterAction = [self.net.res_bus.vm_pu[1], max(self.net.res_line.loading_percent),
+                               np.std(self.net.res_line.loading_percent)]
+            done = self.stateIndex == (len(self.powerProfile) - 1)
+            if done == False:
+                self.incrementLoadProfile()
+                if self.method in ('dqn', 'ddqn', 'td3'):
+                    reward2 = self.calculateReward(self.net.res_bus.vm_pu, self.net.res_line.loading_percent,
+                                                   self.net.res_bus.va_degree[bus_index_shunt]);
+                    stateAfterEnvChange = self.getCurrentStateForDQN()
+                else:
+                    reward2 = self.calculateReward(self.net.res_bus.vm_pu, self.net.res_line.loading_percent);
+                    stateAfterEnvChange = self.getCurrentState()
+            # print('rew2: ',reward2)
+            reward = 0.7 * reward1 + 0.3 * reward2;
+        else:
+            print('wrong block!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
+        stateAfterEnvChange.extend(stateAfterAction)
+        # print(self.errorState)
+
+        # print(reward2)
+        # print('totrew: ', reward)
         return stateAfterEnvChange, reward, done or networkFailure, measAfterAction;
 
     def incrementLoadProfile(self):
@@ -717,11 +768,6 @@ class powerGrid_ieee2:
         print(min(v_arr))
         plt.plot(v_arr)
         plt.show()
-
-
-
-
-
 
     # ## Transition from reference line loading to reactance of series comp
     # def K_x_comp_pu(self, loading_perc_ref, line_index, k_old):
