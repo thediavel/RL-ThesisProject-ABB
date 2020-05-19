@@ -59,6 +59,7 @@ class ShuntFACTS(ct.basic_controller.Controller):
         self.v_delta_accum += self.v_delta
         self.iter_counter += 1
 
+
         #print(self.net.shunt.q_mvar[self.shuntIndex])
         #print(self.meas)
         #print(self.iter_counter)
@@ -129,12 +130,16 @@ class SeriesFACTS(ct.basic_controller.Controller):
             op = self.x_line_pu * self.x_comp_min
             self.maxed_counter += 1
 
-        # Set output of device
-        self.net.impedance.loc[self.serIndex, ['xft_pu', 'xtf_pu']] = op
 
-        # Bypassing series device if impedance close to 0
+        # Bypassing series device if impedance close to 0 and set output to last value.
         if abs(op) < 0.0001:  # Helping with convergence
-            self.net.switch.closed[self.switchInd] = True  # ACTUAL network, not a copy
+            self.net.switch.closed[self.switchInd] = True  # ACTUAL network
+        else:
+            # Set output of device if not bypassed
+            self.net.impedance.loc[self.serIndex, ['xft_pu', 'xtf_pu']] = op
+            #print(op)
+
+
 
         # Update for posible next iter of control
         #print('SERIES:')
