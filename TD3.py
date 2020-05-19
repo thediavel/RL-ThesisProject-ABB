@@ -15,6 +15,7 @@ import math
 
 
 
+
 class Actor(nn.Module):
     def __init__(self, state_dim, action_dim,p=0.3):
         super(Actor, self).__init__()
@@ -67,6 +68,7 @@ class Critic(nn.Module):
 
         q1 = F.relu(self.l1(sa))
         q1 = F.relu(self.l2(q1))
+        q1 = self.drop_layer(q1)
         q1 = self.l3(q1)
         return q1
 
@@ -620,3 +622,5 @@ class TD3:
         plt.ylabel('Bus Voltage [p.u.]',  Figure=fig3, color=color)
         plt.legend(['v no FACTS', 'v FACTS', 'v FACTS no series comp','v RL FACTS', 'v FACTS each ts', 'v RL FACTS all act.'], loc=1)
         plt.show()
+
+
