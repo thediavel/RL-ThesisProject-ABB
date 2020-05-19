@@ -421,6 +421,7 @@ class DQN:
         self.env_2bus.reset()
         stateIndex = self.env_2bus.stateIndex
         loadProfile = self.env_2bus.loadProfile
+        performance=0;
         while stateIndex + steps+4 > len(loadProfile):
             self.env_2bus.reset()  # Reset to get sufficient number of steps left in time series
             stateIndex = self.env_2bus.stateIndex
@@ -461,7 +462,6 @@ class DQN:
         load_nom_pu = 2 #the nominal IEEE load in pu
         loading_arr = list(load_nom_pu*(loadProfile[stateIndex:stateIndex + steps] / stat.mean(loadProfile)))
 
-
         # Loop through each load
         for i in range(0, steps):
             # no FACTS
@@ -481,7 +481,7 @@ class DQN:
             v_FACTS.append(voltage)
             lp_max_FACTS.append(lp_max)
             lp_std_FACTS.append(lp_std)
-            rewardFacts.append((200+(math.exp(abs(1 - voltage) * 10) * -20) - lp_std)/200  )
+            rewFacts=(200+(math.exp(abs(1 - voltage) * 10) * -20) - lp_std)/200 ;
 
             # FACTS no Series compensation
             voltage, lp_max, lp_std = qObj_env_FACTS_noSeries.runFACTSnoRL(v_ref, lp_reference, bus_index_shunt, bus_index_voltage,
@@ -489,7 +489,7 @@ class DQN:
             v_FACTS_noSeries.append(voltage)
             lp_max_FACTS_noSeries.append(lp_max)
             lp_std_FACTS_noSeries.append(lp_std)
-            rewardFactsNoSeries.append((200+(math.exp(abs(1 - voltage) * 10) * -20) - lp_std)/200  )
+            rewFactsNoSeries=(200+(math.exp(abs(1 - voltage) * 10) * -20) - lp_std)/200 ;
 
             # FACTS with both series and shunt, with system operator update EACH time step
             lp_reference_eachTS = qObj_env_FACTS_eachTS.lp_ref()
@@ -499,21 +499,19 @@ class DQN:
             v_FACTS_eachTS.append(voltage)
             lp_max_FACTS_eachTS.append(lp_max)
             lp_std_FACTS_eachTS.append(lp_std)
-            rewardFactsEachTS.append((200+(math.exp(abs(1 - voltage) * 10) * -20) - lp_std)/200  )             # FACTS with both series and shunt
+            rewFactsEachTS=(200+(math.exp(abs(1 - voltage) * 10) * -20) - lp_std)/200 ;
 
             # RLFACTS
             takeLastAction=False;
             qObj_env_RLFACTS.eval_net.eval();
-            currentMeasurements, voltage, lp_max, lp_std, rewardRL = qObj_env_RLFACTS.runFACTSgreedyRL(bus_index_voltage, currentState, takeLastAction)  # runpp is done within this function
+            currentMeasurements, voltage, lp_max, lp_std,r = qObj_env_RLFACTS.runFACTSgreedyRL(bus_index_voltage, currentState, takeLastAction)  # runpp is done within this function
             currentState = np.append(currentState, [currentMeasurements], axis=0)
             currentState = np.delete(currentState, 0, axis=0);
 
             v_RLFACTS.append(voltage)
             lp_max_RLFACTS.append(lp_max)
             lp_std_RLFACTS.append(lp_std)
-            rewardFactsRL.append(rewardRL)
-            #print(rewardRL)
-            #rewardFactsRL.append((200+(math.exp(abs(1 - voltage) * 10) * -20) - lp_std)/200  )          # FACTS with both series and shunt
+            rewardFactsRL.append(r)          # FACTS with both series and shunt
 
 
             # if benchmarkFlag:
@@ -530,7 +528,22 @@ class DQN:
             qObj_env_FACTS.env_2bus.scaleLoadAndPowerValue(stateIndex)
             qObj_env_FACTS_noSeries.env_2bus.scaleLoadAndPowerValue(stateIndex)
             qObj_env_FACTS_eachTS.env_2bus.scaleLoadAndPowerValue(stateIndex)
+            rewFacts = 0.7 * rewFacts + 0.3 * (
+                        200 + (math.exp(abs(1 - qObj_env_FACTS.env_2bus.net.res_bus.vm_pu[1]) * 10) * -20) - np.std(
+                    qObj_env_FACTS.env_2bus.net.res_line.loading_percent)) / 200
+            rewardFacts.append(rewFacts)
+            rewFactsNoSeries = 0.7 * rewFactsNoSeries + 0.3 * (200 + (
+                        math.exp(abs(1 - qObj_env_FACTS_noSeries.env_2bus.net.res_bus.vm_pu[1]) * 10) * -20) - np.std(
+                qObj_env_FACTS_noSeries.env_2bus.net.res_line.loading_percent)) / 200
+            rewardFactsNoSeries.append(rewFactsNoSeries)
+            rewFactsEachTS = 0.7 * rewFacts + 0.3 * (200 + (
+                        math.exp(abs(1 - qObj_env_FACTS_eachTS.env_2bus.net.res_bus.vm_pu[1]) * 10) * -20) - np.std(
+                qObj_env_FACTS_eachTS.env_2bus.net.res_line.loading_percent)) / 200
+            rewardFactsEachTS.append(rewFactsEachTS)  # FACTS with both series and shunt
+            if r > rewFacts and r > rewFactsNoSeries:
+                performance += 1;
 
+        print(performance/steps)
         # Get benchmark from pickle files:
         if benchmarkFlag:
             with open('Data/voltBenchmark.pkl', 'rb') as pickle_file:

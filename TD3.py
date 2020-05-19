@@ -15,7 +15,6 @@ import math
 
 
 
-
 class Actor(nn.Module):
     def __init__(self, state_dim, action_dim,p=0.3):
         super(Actor, self).__init__()
@@ -68,7 +67,7 @@ class Critic(nn.Module):
 
         q1 = F.relu(self.l1(sa))
         q1 = F.relu(self.l2(q1))
-        q1 = self.drop_layer(q1)
+        q1 = self.drop_layer(q1);
         q1 = self.l3(q1)
         return q1
 
@@ -232,7 +231,7 @@ class TD3:
 
     def learn(self):
         self.learn_step_counter += 1
-        if self.learn_step_counter%self.UpdateAfter==1:
+        if self.learn_step_counter%self.UpdateAfter == 1:
             # Sample replay buffer
             state, action, reward,next_state, done = self.memory.sample(self.batch_size)
             state = Variable(torch.FloatTensor(state).cuda())
@@ -347,7 +346,7 @@ class TD3:
         busVoltage = measAfterAction[0]
         lp_max = measAfterAction[1]
         lp_std = measAfterAction[2]
-        return nextStateMeasurements, busVoltage, lp_max, lp_std
+        return nextStateMeasurements, busVoltage, lp_max, lp_std,reward
 
     ## Run environment and try all actions and choose highest reward
     def runFACTSallActionsRL(self, busVoltageIndex):
@@ -407,6 +406,7 @@ class TD3:
         self.env_2bus.reset()
         stateIndex = self.env_2bus.stateIndex
         loadProfile = self.env_2bus.loadProfile
+        performance=0;
         while stateIndex + steps+4 > len(loadProfile):
             self.env_2bus.reset()  # Reset to get sufficient number of steps left in time series
             stateIndex = self.env_2bus.stateIndex
@@ -466,7 +466,8 @@ class TD3:
             v_FACTS.append(voltage)
             lp_max_FACTS.append(lp_max)
             lp_std_FACTS.append(lp_std)
-            rewardFacts.append((200+(math.exp(abs(1 - voltage) * 10) * -20) - lp_std)/200  )
+            rewFacts=(200+(math.exp(abs(1 - voltage) * 10) * -20) - lp_std)/200 ;
+            #rewardFacts.append( )#
 
 
             # FACTS no Series compensation
@@ -475,7 +476,9 @@ class TD3:
             v_FACTS_noSeries.append(voltage)
             lp_max_FACTS_noSeries.append(lp_max)
             lp_std_FACTS_noSeries.append(lp_std)
-            rewardFactsNoSeries.append((200+(math.exp(abs(1 - voltage) * 10) * -20) - lp_std)/200  )
+            rewFactsNoSeries=(200+(math.exp(abs(1 - voltage) * 10) * -20) - lp_std)/200 ;
+
+            #rewardFactsNoSeries.append((200+(math.exp(abs(1 - voltage) * 10) * -20) - lp_std)/200  )
 
             # FACTS with both series and shunt, with system operator update EACH time step
             lp_reference_eachTS = qObj_env_FACTS_eachTS.lp_ref()
@@ -485,12 +488,14 @@ class TD3:
             v_FACTS_eachTS.append(voltage)
             lp_max_FACTS_eachTS.append(lp_max)
             lp_std_FACTS_eachTS.append(lp_std)
-            rewardFactsEachTS.append((200+(math.exp(abs(1 - voltage) * 10) * -20) - lp_std)/200  )             # FACTS with both series and shunt
+            rewFactsEachTS=(200+(math.exp(abs(1 - voltage) * 10) * -20) - lp_std)/200 ;
+
+            #rewardFactsEachTS.append((200+(math.exp(abs(1 - voltage) * 10) * -20) - lp_std)/200  )             # FACTS with both series and shunt
 
             # RLFACTS
             takeLastAction=False;
             qObj_env_RLFACTS.actor.eval();
-            currentMeasurements, voltage, lp_max, lp_std = qObj_env_RLFACTS.runFACTSgreedyRL(bus_index_voltage, currentState, takeLastAction)  # runpp is done within this function
+            currentMeasurements, voltage, lp_max, lp_std,r = qObj_env_RLFACTS.runFACTSgreedyRL(bus_index_voltage, currentState, takeLastAction)  # runpp is done within this function
             currentState = np.append(currentState, [currentMeasurements], axis=0)
             currentState = np.delete(currentState, 0, axis=0);
 
@@ -498,7 +503,7 @@ class TD3:
             lp_max_RLFACTS.append(lp_max)
             lp_std_RLFACTS.append(lp_std)
 
-            rewardFactsRL.append((200+(math.exp(abs(1 - voltage) * 10) * -20) - lp_std)/200  )          # FACTS with both series and shunt
+            rewardFactsRL.append(r)          # FACTS with both series and shunt
 
             if testAllActionsFlag:
             # RL All actions
@@ -514,8 +519,23 @@ class TD3:
             qObj_env_FACTS.env_2bus.scaleLoadAndPowerValue(stateIndex)
             qObj_env_FACTS_noSeries.env_2bus.scaleLoadAndPowerValue(stateIndex)
             qObj_env_FACTS_eachTS.env_2bus.scaleLoadAndPowerValue(stateIndex)
+            rewFacts=0.7*rewFacts + 0.3*(200 + (math.exp(abs(1 - qObj_env_FACTS.env_2bus.net.res_bus.vm_pu[1]) * 10) * -20) - np.std(qObj_env_FACTS.env_2bus.net.res_line.loading_percent)) / 200
+            rewardFacts.append(rewFacts  )
+            rewFactsNoSeries=0.7*rewFactsNoSeries + 0.3*(200 + (math.exp(abs(1 - qObj_env_FACTS_noSeries.env_2bus.net.res_bus.vm_pu[1]) * 10) * -20) - np.std(qObj_env_FACTS_noSeries.env_2bus.net.res_line.loading_percent)) / 200
+            rewardFactsNoSeries.append(rewFactsNoSeries  )
+            rewFactsEachTS=0.7*rewFacts + 0.3*(200 + (math.exp(abs(1 - qObj_env_FACTS_eachTS.env_2bus.net.res_bus.vm_pu[1]) * 10) * -20) - np.std(qObj_env_FACTS_eachTS.env_2bus.net.res_line.loading_percent)) / 200
+            rewardFactsEachTS.append(rewFactsEachTS )             # FACTS with both series and shunt
+            if ( rewFacts-r < 0.01) and (rewFactsNoSeries-r < 0.01) :
+                performance+=1;
 
 
+
+
+
+        print(performance/steps)
+        print('mean reward facts:',np.mean(rewardFacts))
+        print('mean reward facts with RL:',np.mean(rewardFactsRL))
+        print('mean reward facts no series:',np.mean(rewardFactsNoSeries))
 
         # Make plots
         i_list = list(range(1, steps+1))
@@ -593,17 +613,17 @@ class TD3:
         #Plot Rewards
         fig2 = plt.figure()
         color = 'tab:blue'
-        plt.plot(i_list, rewardNoFacts, Figure=fig2, color=color)
+        #plt.plot(i_list, rewardNoFacts, Figure=fig2, color=color)
         plt.plot(i_list, rewardFacts, Figure=fig2, color='g')
         plt.plot(i_list, rewardFactsNoSeries, Figure=fig2, color='k')
         plt.plot(i_list, rewardFactsRL, Figure=fig2, color='r')
-        plt.plot(i_list, rewardFactsEachTS, Figure=fig2, color='c')
-        if testAllActionsFlag:
-            plt.plot(i_list, rewardFactsAllActions, Figure=fig2, color='y')
+        #plt.plot(i_list, rewardFactsEachTS, Figure=fig2, color='c')
+        #if testAllActionsFlag:
+        #    plt.plot(i_list, rewardFactsAllActions, Figure=fig2, color='y')
         plt.title('Rewards as per Environment Setup')
         plt.xlabel('TimeStep',  Figure=fig2)
         plt.ylabel('Reward',  Figure=fig2, color=color)
-        plt.legend(['no FACTS', 'FACTS', 'FACTS no series comp','RL FACTS', 'FACTS each ts', 'RL FACTS all act.'], loc=1)
+        plt.legend([ 'FACTS', 'FACTS no series comp','RL FACTS'], loc=1)
         plt.show()
 
 
@@ -622,5 +642,3 @@ class TD3:
         plt.ylabel('Bus Voltage [p.u.]',  Figure=fig3, color=color)
         plt.legend(['v no FACTS', 'v FACTS', 'v FACTS no series comp','v RL FACTS', 'v FACTS each ts', 'v RL FACTS all act.'], loc=1)
         plt.show()
-
-
