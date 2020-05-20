@@ -281,17 +281,14 @@ class qLearning:
 
     ## Run environment with FACTS but no RL, series compensation TRUE or FALSE
     def runFACTSnoRL(self, v_ref, lp_ref, bus_index_shunt, bus_index_voltage, line_index, series_comp_enabl):
+        # Enable/Disable devices
         self.env_2bus.net.switch.at[1, 'closed'] = False if series_comp_enabl else True
         self.env_2bus.net.switch.at[0, 'closed'] = True
-        ##shunt compenstation
-        q_comp = self.env_2bus.Shunt_q_comp(v_ref, bus_index_shunt, self.env_2bus.q_old);
-        self.env_2bus.q_old = q_comp;
-        self.env_2bus.net.shunt.q_mvar = q_comp;
-        ##series compensation
-        k_x_comp_pu = self.env_2bus.K_x_comp_pu(lp_ref, line_index, self.env_2bus.k_old);
-        self.env_2bus.k_old = k_x_comp_pu;
-        x_line_pu = self.env_2bus.X_pu(line_index)
-        self.env_2bus.net.impedance.loc[0, ['xft_pu', 'xtf_pu']] = x_line_pu * k_x_comp_pu
+        self.env_2bus.net.controller.in_service[1] = True if series_comp_enabl else False
+
+        # Set reference values
+        self.env_2bus.shuntControl.ref = v_ref;
+        self.env_2bus.seriesControl.ref = lp_ref;
         self.env_2bus.runEnv(runControl=True)
         busVoltage = self.env_2bus.net.res_bus.vm_pu[bus_index_voltage]
         lp_max = max(self.env_2bus.net.res_line.loading_percent)
@@ -300,25 +297,19 @@ class qLearning:
 
     ## Run the environment controlled by greedy RL
     def runFACTSgreedyRL(self, busVoltageIndex, currentState,takeLastAction):
+        #print(currentState)
         actionIndex = self.q_table[currentState].idxmax()
-        if len(self.q_table[currentState].unique()) == 1:
-            print(currentState)
+        #if len(self.q_table[currentState].unique()) == 1:
+        #    print(currentState)
         action = self.getActionFromIndex(actionIndex)
-        if takeLastAction:
-            action=['na','na']
-        nextStateMeasurements, reward, done, _ = self.env_2bus.takeAction(action[0], action[1])
-        busVoltage = self.env_2bus.net.res_bus.vm_pu[busVoltageIndex]
-        lp_max = max(self.env_2bus.net.res_line.loading_percent)
-        lp_std = np.std(self.env_2bus.net.res_line.loading_percent)
-        return nextStateMeasurements, busVoltage, lp_max, lp_std
+        nextStateMeasurements, reward, done, measAfterAction = self.env_2bus.takeAction(action[0], action[1])
+        busVoltage = measAfterAction[0]
+        lp_max = measAfterAction[1]
+        lp_std = measAfterAction[2]
+        return nextStateMeasurements, busVoltage, lp_max, lp_std, reward
 
-    ## Compare performance between 4 scenarios:
-    ## No FACTS
-    ## FACTS no RL (both series and shunt devices)
-    ## FACTS no RL (Only shunt device)
-    ## FACTS RL (Both series and shunt device)
-    ## Makes an adjusted nose-curve of a sorted liading profile.
-    def comparePerformance(self, steps, oper_upd_interval, bus_index_shunt, bus_index_voltage, line_index):
+    def comparePerformance(self, steps, oper_upd_interval, bus_index_shunt, bus_index_voltage, line_index,
+                           benchmarkFlag):
         v_noFACTS = []
         lp_max_noFACTS = []
         lp_std_noFACTS = []
@@ -331,117 +322,238 @@ class qLearning:
         v_FACTS_noSeries = []
         lp_max_FACTS_noSeries = []
         lp_std_FACTS_noSeries = []
+        v_FACTS_eachTS = []
+        lp_max_FACTS_eachTS = []
+        lp_std_FACTS_eachTS = []
+        rewardNoFacts = []
+        rewardFacts = []
+        rewardFactsEachTS = []
+        rewardFactsNoSeries = []
+        rewardFactsRL = []
         self.env_2bus.setMode('test')
         self.env_2bus.reset()
-
         stateIndex = self.env_2bus.stateIndex
         loadProfile = self.env_2bus.loadProfile
-        while stateIndex + steps > len(loadProfile):
+        performance = 0
+        while stateIndex + steps + 4 > len(loadProfile):
             self.env_2bus.reset()  # Reset to get sufficient number of steps left in time series
             stateIndex = self.env_2bus.stateIndex
             loadProfile = self.env_2bus.loadProfile
 
-        # Need seperate copy for each scenario
-        qObj_env_noFACTS = copy.deepcopy(self)
-        qObj_env_FACTS = copy.deepcopy(self)
-        qObj_env_RLFACTS = copy.deepcopy(self)
-        qObj_env_FACTS_noSeries = copy.deepcopy(self)
+        # Create copy of network for historic measurements
+        temp = copy.deepcopy(self)
+        currentMeasurements = temp.env_2bus.getCurrentState();
+        # temp.eval_net.eval()
 
-        # Initialise states, needed for greedy RL
-        # loading
-        currentMeasurements = qObj_env_RLFACTS.env_2bus.getCurrentState()
-        oldMeasurements = currentMeasurements
+        # Run for history measurements to get full state repr for RL.
+        # currentState = [];
+        # for j in range(0, 3):
+        #     m = temp.env_2bus.getCurrentStateForDQN();
+        #     m.extend(
+        #         m)  # creates the 2nd part of the state, "after action" but was no action with RL disabled in this part.
+        #     currentState.append(m);
+        #     temp.env_2bus.stateIndex += 1;
+        #     temp.env_2bus.scaleLoadAndPowerValue(temp.env_2bus.stateIndex)
+        #     temp.env_2bus.runEnv(False);
+        # currentState.append(self.env_2bus.getCurrentStateForDQN())
+        # currentState[3].extend(self.env_2bus.getCurrentStateForDQN())
+        # currentState = np.array(currentState)  # Only used for RLFACTS case
+
+        # Need seperate copy for each scenario
+        qObj_env_noFACTS = copy.deepcopy(temp)
+        qObj_env_FACTS = copy.deepcopy(temp)
+        qObj_env_RLFACTS = copy.deepcopy(temp)
+        qObj_env_FACTS_noSeries = copy.deepcopy(temp)
+        qObj_env_FACTS_eachTS = copy.deepcopy(temp)
+
+        # Make sure FACTS devices disabled for noFACTS case and no Series for that case
+        qObj_env_noFACTS.env_2bus.net.switch.at[0, 'closed'] = False
+        qObj_env_noFACTS.env_2bus.net.switch.at[1, 'closed'] = True
+        qObj_env_FACTS_noSeries.env_2bus.net.switch.at[1, 'closed'] = True
 
         # To plot horizontal axis in nose-curve
-        load_nom_pu = 2 #the nominal IEEE load in pu
-        loading_arr = list(load_nom_pu*(loadProfile[stateIndex:stateIndex + steps] / stat.mean(loadProfile)))
+        load_nom_pu = 2  # the nominal IEEE load in pu
+        loading_arr = list(load_nom_pu * (loadProfile[stateIndex:stateIndex + steps] / stat.mean(loadProfile)))
 
         # Loop through each load
         for i in range(0, steps):
             # no FACTS
-            qObj_env_noFACTS.env_2bus.runEnv(runControl=False)  # No control of shunt comp transformer as it should be disabled.
+            qObj_env_noFACTS.env_2bus.runEnv(runControl=False)  # No FACTS, no control
             v_noFACTS.append(qObj_env_noFACTS.env_2bus.net.res_bus.vm_pu[bus_index_voltage])
             lp_max_noFACTS.append(max(qObj_env_noFACTS.env_2bus.net.res_line.loading_percent))
             lp_std_noFACTS.append(np.std(qObj_env_noFACTS.env_2bus.net.res_line.loading_percent))
+            rewardNoFacts.append((200 + (math.exp(
+                abs(1 - qObj_env_noFACTS.env_2bus.net.res_bus.vm_pu[bus_index_voltage]) * 10) * -20) - np.std(
+                qObj_env_noFACTS.env_2bus.net.res_line.loading_percent)) / 200)
 
-            # FACTS
+            # FACTS with both series and shunt
             v_ref = 1
             if i % oper_upd_interval == 0:
                 lp_reference = qObj_env_FACTS.lp_ref()
-            #print(i)
-            voltage, lp_max, lp_std = qObj_env_FACTS.runFACTSnoRL(v_ref, lp_reference, bus_index_shunt, bus_index_voltage,
-                                           line_index, True)  # Series compensation enabled
+                # print('oper', lp_reference)
+            voltage, lp_max, lp_std = qObj_env_FACTS.runFACTSnoRL(v_ref, lp_reference, bus_index_shunt,
+                                                                  bus_index_voltage,
+                                                                  line_index, True)  # Series compensation enabled
             v_FACTS.append(voltage)
             lp_max_FACTS.append(lp_max)
             lp_std_FACTS.append(lp_std)
+            rewFacts = (200 + (math.exp(abs(1 - voltage) * 10) * -20) - lp_std) / 200;
 
             # FACTS no Series compensation
-            voltage, lp_max, lp_std = qObj_env_FACTS_noSeries.runFACTSnoRL(v_ref, lp_reference, bus_index_shunt, bus_index_voltage,
-                                                          line_index, False)  # Series compensation enabled
+            voltage, lp_max, lp_std = qObj_env_FACTS_noSeries.runFACTSnoRL(v_ref, lp_reference, bus_index_shunt,
+                                                                           bus_index_voltage,
+                                                                           line_index,
+                                                                           False)  # Series compensation disabled
             v_FACTS_noSeries.append(voltage)
             lp_max_FACTS_noSeries.append(lp_max)
             lp_std_FACTS_noSeries.append(lp_std)
+            rewFactsNoSeries = (200 + (math.exp(abs(1 - voltage) * 10) * -20) - lp_std) / 200;
+
+            # FACTS with both series and shunt, with system operator update EACH time step
+            lp_reference_eachTS = qObj_env_FACTS_eachTS.lp_ref()
+            # print('eachTS', lp_reference_eachTS)
+            voltage, lp_max, lp_std = qObj_env_FACTS_eachTS.runFACTSnoRL(v_ref, lp_reference_eachTS, bus_index_shunt,
+                                                                         bus_index_voltage,
+                                                                         line_index,
+                                                                         True)  # Series compensation enabled
+            v_FACTS_eachTS.append(voltage)
+            lp_max_FACTS_eachTS.append(lp_max)
+            lp_std_FACTS_eachTS.append(lp_std)
+            # rewFactsEachTS=(200+(math.exp(abs(1 - voltage) * 10) * -20) - lp_std)/200 ;
 
             # RLFACTS
-            currentState = qObj_env_RLFACTS.getStateFromMeasurements_2([oldMeasurements, currentMeasurements])
-            takeLastAction=False;
-            #if len(self.q_table[currentState].unique()) == 1:
-            #    takeLastAction = True;
-                #currentState = qObj_env_RLFACTS.getStateFromMeasurements_2([currentMeasurements, currentMeasurements])
-            oldMeasurements = currentMeasurements
-            currentMeasurements, voltage, lp_max, lp_std = qObj_env_RLFACTS.runFACTSgreedyRL(bus_index_voltage, currentState, takeLastAction)  # runpp is done within this function
+            takeLastAction = False;
+            oldMeasurements = currentMeasurements;  # current and old same first step of episode
+            currentState = temp.getStateFromMeasurements_2([oldMeasurements, currentMeasurements]);
+            currentMeasurements, voltage, lp_max, lp_std, r = qObj_env_RLFACTS.runFACTSgreedyRL(bus_index_voltage,
+                                                                                                currentState,
+                                                                                                takeLastAction)  # runpp is done within this function
+
             v_RLFACTS.append(voltage)
             lp_max_RLFACTS.append(lp_max)
             lp_std_RLFACTS.append(lp_std)
+            rewardFactsRL.append(r)  # FACTS with both series and shunt
+            currentMeasurements = qObj_env_RLFACTS.env_2bus.getCurrentState();
+
 
             # Increment state
             stateIndex += 1
-            qObj_env_noFACTS.env_2bus.scaleLoadAndPowerValue(stateIndex)
+            qObj_env_noFACTS.env_2bus.scaleLoadAndPowerValue(
+                stateIndex)  # Only for these, rest are incremented within their respective functions
             qObj_env_FACTS.env_2bus.scaleLoadAndPowerValue(stateIndex)
-            qObj_env_RLFACTS.env_2bus.scaleLoadAndPowerValue(stateIndex)
             qObj_env_FACTS_noSeries.env_2bus.scaleLoadAndPowerValue(stateIndex)
-            #print(i)
+            qObj_env_FACTS_eachTS.env_2bus.scaleLoadAndPowerValue(stateIndex)
+            rewFacts = 0.7 * rewFacts + 0.3 * (
+                    200 + (math.exp(abs(1 - qObj_env_FACTS.env_2bus.net.res_bus.vm_pu[1]) * 10) * -20) - np.std(
+                qObj_env_FACTS.env_2bus.net.res_line.loading_percent)) / 200
+            rewardFacts.append(rewFacts)
+            rewFactsNoSeries = 0.7 * rewFactsNoSeries + 0.3 * (200 + (
+                    math.exp(abs(1 - qObj_env_FACTS_noSeries.env_2bus.net.res_bus.vm_pu[1]) * 10) * -20) - np.std(
+                qObj_env_FACTS_noSeries.env_2bus.net.res_line.loading_percent)) / 200
+            rewardFactsNoSeries.append(rewFactsNoSeries)
+            rewFactsEachTS = 0.7 * rewFacts + 0.3 * (200 + (
+                    math.exp(abs(1 - qObj_env_FACTS_eachTS.env_2bus.net.res_bus.vm_pu[1]) * 10) * -20) - np.std(
+                qObj_env_FACTS_eachTS.env_2bus.net.res_line.loading_percent)) / 200
+            rewardFactsEachTS.append(rewFactsEachTS)  # FACTS with both series and shunt
+            if (rewFacts - r < 0.01) and (rewFactsNoSeries - r < 0.01):
+                performance += 1;
 
-        # Adjust arrays so indices are overlapping correctly. otherwise the RL will have i+1:th state where rest has i:th state
-        loading_arr.pop(0)
-        v_noFACTS.pop(0)
-        lp_max_noFACTS.pop(0)
-        lp_std_noFACTS.pop(0)
-        v_FACTS.pop(0)
-        lp_max_FACTS.pop(0)
-        lp_std_FACTS.pop(0)
-        v_FACTS_noSeries.pop(0)
-        lp_max_FACTS_noSeries.pop(0)
-        lp_std_FACTS_noSeries.pop(0)
-        v_RLFACTS.pop(-1)
-        lp_max_RLFACTS.pop(-1)
-        lp_std_RLFACTS.pop(-1)
+        print(performance / steps)
+        print('mean reward facts:', np.mean(rewardFacts))
+        print('mean reward facts with RL:', np.mean(rewardFactsRL))
+        print('mean reward facts no series:', np.mean(rewardFactsNoSeries))
+
+        # Get benchmark from pickle files:
+        if benchmarkFlag:
+            with open('Data/voltBenchmark.pkl', 'rb') as pickle_file:
+                v_RLFACTS_Benchmark = pickle.load(pickle_file)
+                v_RLFACTS_Benchmark = v_RLFACTS_Benchmark[0:steps]
+            with open('Data/lpmaxBenchmark.pkl', 'rb') as pickle_file:
+                lp_max_RLFACTS_Benchmark = pickle.load(pickle_file)
+                lp_max_RLFACTS_Benchmark = lp_max_RLFACTS_Benchmark[0:steps]
+            with open('Data/lpstdBenchmark.pkl', 'rb') as pickle_file:
+                lp_std_RLFACTS_Benchmark = pickle.load(pickle_file)
+                # print(lp_std_RLFACTS_Benchmark)
+                lp_std_RLFACTS_Benchmark = lp_std_RLFACTS_Benchmark[0:steps]
+                # print(lp_std_RLFACTS_Benchmark)
+            with open('Data/rewBenchmark.pkl', 'rb') as pickle_file:
+                rewardFactsBenchmark = pickle.load(pickle_file)
+                rewardFactsBenchmark = rewardFactsBenchmark[0:steps]
 
         # Make plots
-        i_list = list(range(1, steps))
+        i_list = list(range(1, steps + 1))
         fig, ax1 = plt.subplots()
         color = 'tab:blue'
+        ax1.set_title('Voltage and line loading standard deviation for an episode')
         ax1.set_xlabel('Time series')
         ax1.set_ylabel('Bus Voltage', color=color)
         ax1.plot(i_list, v_noFACTS, color=color)
         ax1.plot(i_list, v_FACTS, color='g')
         ax1.plot(i_list, v_FACTS_noSeries, color='k')
         ax1.plot(i_list, v_RLFACTS, color='r')
-        ax1.legend(['v no facts', 'v facts' , 'v facts no series comp','v RL facts'], loc=2)
+        # ax1.plot(i_list, v_FACTS_eachTS, color= 'c')
+        if benchmarkFlag:
+            ax1.plot(i_list, v_RLFACTS_Benchmark, color='y')
+
+        # ax1.legend(['v no facts', 'v facts' , 'v facts no series comp','v RL facts', 'v RL facts upd each ts', 'v RL benchmark'], loc=2)
+        ax1.legend(['v no facts', 'v facts shunt+series', 'v facts shunt only', 'v RL facts', 'v RL benchmark'], loc=2)
         ax2 = ax1.twinx()
 
         color = 'tab:blue'
         ax2.set_ylabel('line loading percentage std [% units]', color='m')
-        ax2.plot(i_list, lp_std_noFACTS, color=color, linestyle = 'dashed')
-        ax2.plot(i_list, lp_std_FACTS, color='g',linestyle = 'dashed')
-        ax2.plot(i_list, lp_std_FACTS_noSeries, color='k', linestyle = 'dashed')
-        ax2.plot(i_list, lp_std_RLFACTS, color='r', linestyle = 'dashed')
-        ax2.legend(['std lp no facts', 'std lp facts', 'std lp facts no series comp', 'std lp RL facts'], loc=1)
+        ax2.plot(i_list, lp_std_noFACTS, color=color, linestyle='dashed')
+        ax2.plot(i_list, lp_std_FACTS, color='g', linestyle='dashed')
+        ax2.plot(i_list, lp_std_FACTS_noSeries, color='k', linestyle='dashed')
+        ax2.plot(i_list, lp_std_RLFACTS, color='r', linestyle='dashed')
+        # ax2.plot(i_list, lp_std_FACTS_eachTS, color='c', linestyle = 'dashed')
+        if benchmarkFlag:
+            ax2.plot(i_list, lp_std_RLFACTS_Benchmark, color='y', linestyle='dashed')
+        # ax2.legend(['std lp no facts', 'std lp facts', 'std lp facts no series comp', 'std lp RL facts', 'std lp facts each ts', 'std lp RL benchmark' ], loc=1)
+        ax2.legend(['std lp no facts', 'std lp facts shunt+series', 'std lp facts shunt only', 'std lp RL facts',
+                    'std lp RL benchmark'], loc=1)
+        plt.grid()
         plt.show()
+
+        # Plot Rewards
+        fig2 = plt.figure()
+        color = 'tab:blue'
+        plt.plot(i_list, rewardNoFacts, Figure=fig2, color=color)
+        plt.plot(i_list, rewardFacts, Figure=fig2, color='g')
+        plt.plot(i_list, rewardFactsNoSeries, Figure=fig2, color='k')
+        plt.plot(i_list, rewardFactsRL, Figure=fig2, color='r')
+        # plt.plot(i_list, rewardFactsEachTS, Figure=fig2, color='c')
+        if benchmarkFlag:
+            plt.plot(i_list, rewardFactsBenchmark, Figure=fig2, color='y')
+        plt.title('Rewards as per Environment Setup')
+        plt.xlabel('TimeStep', Figure=fig2)
+        plt.ylabel('Reward', Figure=fig2, color=color)
+        # plt.legend(['no FACTS', 'FACTS', 'FACTS no series comp', 'RL FACTS', 'FACTS each ts', 'RL FACTS benchmark.'],
+        #           loc=1)
+        plt.legend(['no FACTS', 'FACTS', 'FACTS no series comp', 'RL FACTS', 'RL FACTS benchmark.'],
+                   loc=1)
+        plt.grid()
+        plt.show()
+
+        ## Calculate measure for comparing RL and Benchmark wrt reward.
+        performanceFactsRL = 0
+        performanceFacts = 0
+        performanceFactsnoSeries = 0
+        PerformanceNoFacts = 0
+        for i in range(0, steps):
+            performanceFactsRL += math.sqrt((rewardFactsRL[i] - rewardFactsBenchmark[i]) ** 2)
+            performanceFacts += math.sqrt((rewardFacts[i] - rewardFactsBenchmark[i]) ** 2)
+            performanceFactsnoSeries += math.sqrt((rewardFactsNoSeries[i] - rewardFactsBenchmark[i]) ** 2)
+            PerformanceNoFacts += math.sqrt((rewardNoFacts[i] - rewardFactsBenchmark[i]) ** 2)
+
+        print('performance FACTS RL: ', performanceFactsRL)
+        print('performance FACTS shunt+series: ', performanceFacts)
+        print('performance FACTS shunt only: ', performanceFactsnoSeries)
+        print('performance no FACTS: ', PerformanceNoFacts)
 
         # Nosecurve:
         loading_arr_sorted = sorted(loading_arr)
-        print(loading_arr_sorted)
+
+        # Sort the measurements
         v_noFACTS_sorted = [x for _, x in sorted(zip(loading_arr, v_noFACTS))]
         lp_max_noFACTS_sorted = [x for _, x in sorted(zip(loading_arr, lp_max_noFACTS))]
         v_FACTS_sorted = [x for _, x in sorted(zip(loading_arr, v_FACTS))]
@@ -450,79 +562,51 @@ class qLearning:
         lp_max_RLFACTS_sorted = [x for _, x in sorted(zip(loading_arr, lp_max_RLFACTS))]
         v_FACTS_noSeries_sorted = [x for _, x in sorted(zip(loading_arr, v_FACTS_noSeries))]
         lp_max_FACTS_noSeries_sorted = [x for _, x in sorted(zip(loading_arr, lp_max_FACTS_noSeries))]
+        v_FACTS_eachTS_sorted = [x for _, x in sorted(zip(loading_arr, v_FACTS_eachTS))]
+        lp_max_FACTS_eachTS_sorted = [x for _, x in sorted(zip(loading_arr, lp_max_FACTS_eachTS))]
+        if benchmarkFlag:
+            v_RLFACTS_Benchmark_sorted = [x for _, x in sorted(zip(loading_arr, v_RLFACTS_Benchmark))]
+            lp_max_RLFACTS_Benchmark_sorted = [x for _, x in sorted(zip(loading_arr, lp_max_RLFACTS_Benchmark))]
 
-        #Trim arrays to only include values below 100 % loading percentage
+        # Trim arrays to only include values <= X % loading percentage
         lp_limit_for_noseCurve = 100
         lp_max_noFACTS_sorted_trim = [x for x in lp_max_noFACTS_sorted if x <= lp_limit_for_noseCurve]
         lp_max_FACTS_sorted_trim = [x for x in lp_max_FACTS_sorted if x <= lp_limit_for_noseCurve]
         lp_max_RLFACTS_sorted_trim = [x for x in lp_max_RLFACTS_sorted if x <= lp_limit_for_noseCurve]
         lp_max_FACTS_noSeries_sorted_trim = [x for x in lp_max_FACTS_noSeries_sorted if x <= lp_limit_for_noseCurve]
-
+        lp_max_FACTS_eachTS_sorted_trim = [x for x in lp_max_FACTS_eachTS_sorted if x <= lp_limit_for_noseCurve]
+        if benchmarkFlag:
+            lp_max_RLFACTS_Benchmark_sorted_trim = [x for x in lp_max_RLFACTS_Benchmark_sorted if
+                                                    x <= lp_limit_for_noseCurve]
         v_noFACTS_sorted_trim = v_noFACTS_sorted[0:len(lp_max_noFACTS_sorted_trim)]
         v_FACTS_sorted_trim = v_FACTS_sorted[0:len(lp_max_FACTS_sorted_trim)]
         v_RLFACTS_sorted_trim = v_RLFACTS_sorted[0:len(lp_max_RLFACTS_sorted_trim)]
         v_FACTS_noSeries_sorted_trim = v_FACTS_noSeries_sorted[0:len(lp_max_FACTS_noSeries_sorted_trim)]
-
+        v_FACTS_eachTS_sorted_trim = v_FACTS_eachTS_sorted[0:len(lp_max_FACTS_eachTS_sorted_trim)]
+        if benchmarkFlag:
+            v_RLFACTS_Benchmark_sorted_trim = v_RLFACTS_Benchmark_sorted[0:len(lp_max_RLFACTS_Benchmark_sorted_trim)]
         loading_arr_plot_noFACTS = loading_arr_sorted[0:len(lp_max_noFACTS_sorted_trim)]
         loading_arr_plot_FACTS = loading_arr_sorted[0:len(lp_max_FACTS_sorted_trim)]
         loading_arr_plot_RLFACTS = loading_arr_sorted[0:len(lp_max_RLFACTS_sorted_trim)]
         loading_arr_plot_FACTS_noSeries = loading_arr_sorted[0:len(lp_max_FACTS_noSeries_sorted_trim)]
+        loading_arr_plot_FACTS_eachTS = loading_arr_sorted[0:len(lp_max_FACTS_eachTS_sorted_trim)]
+        if benchmarkFlag:
+            loading_arr_plot_RLFACTS_Benchmark = loading_arr_sorted[0:len(lp_max_RLFACTS_Benchmark_sorted_trim)]
 
-        #Plot Nose Curve
-        fig2 = plt.figure()
+        # Plot Nose Curve
+        fig3 = plt.figure()
         color = 'tab:blue'
-        plt.plot(loading_arr_plot_noFACTS, v_noFACTS_sorted_trim, Figure=fig2, color=color)
-        plt.plot(loading_arr_plot_FACTS, v_FACTS_sorted_trim, Figure=fig2, color='g')
-        plt.plot(loading_arr_plot_FACTS_noSeries, v_FACTS_noSeries_sorted_trim, Figure=fig2, color='k')
-        plt.plot(loading_arr_plot_RLFACTS, v_RLFACTS_sorted_trim, Figure=fig2, color='r')
-        plt.xlabel('Loading [p.u.]',  Figure=fig2)
-        plt.ylabel('Bus Voltage [p.u.]',  Figure=fig2, color=color)
-        plt.legend(['v no facts', 'v facts', 'v facts no series comp','v RL facts'], loc=2)
+        plt.plot(loading_arr_plot_noFACTS, v_noFACTS_sorted_trim, Figure=fig3, color=color)
+        plt.plot(loading_arr_plot_FACTS, v_FACTS_sorted_trim, Figure=fig3, color='g')
+        plt.plot(loading_arr_plot_FACTS_noSeries, v_FACTS_noSeries_sorted_trim, Figure=fig3, color='k')
+        plt.plot(loading_arr_plot_RLFACTS, v_RLFACTS_sorted_trim, Figure=fig3, color='r')
+        # plt.plot(loading_arr_plot_FACTS_eachTS, v_FACTS_eachTS_sorted_trim, Figure=fig3, color='c')
+        if benchmarkFlag:
+            plt.plot(loading_arr_plot_RLFACTS_Benchmark, v_RLFACTS_Benchmark_sorted_trim, Figure=fig3, color='y')
+        plt.title('Nose curve from episode with sorted voltage levels')
+        plt.xlabel('Loading [p.u.]', Figure=fig3)
+        plt.ylabel('Bus Voltage [p.u.]', Figure=fig3, color=color)
+        # plt.legend(['v no FACTS', 'v FACTS', 'v FACTS no series comp','v RL FACTS', 'v FACTS each ts', 'v RL FACTS benchmark.'], loc=1)
+        plt.legend(['v no FACTS', 'v FACTS', 'v FACTS no series comp', 'v RL FACTS', 'v RL FACTS benchmark.'], loc=1)
+        plt.grid()
         plt.show()
-
-    # # THIS IS SIDE PROJECT WORK IN PROGRESS. NOT SURE WILL BE COMPLETED
-    # def noseCurve_ramp(self, oper_upd_interval, bus_index_shunt, bus_index_voltage, line_index):
-    #     line_load_limit =  100
-    #     v_noFACTS = []
-    #     lp_max_noFACTS = []
-    #     v_FACTS = []
-    #     lp_max_FACTS = []
-    #     v_RLFACTS = []
-    #     lp_max_RLFACTS = []
-    #     v_FACTS_noSeries = []
-    #     lp_max_FACTS_noSeries = []
-    #
-    #     self.env_2bus.reset()
-    #
-    #     qObj_env_noFACTS = copy.deepcopy(self)
-    #     qObj_env_FACTS = copy.deepcopy(self)
-    #     qObj_env_FACTS_noSeries = copy.deepcopy(self)
-    #     qObj_env_RLFACTS = copy.deepcopy(self)
-    #
-    #     self.env_2bus_q_old = 0
-    #     Pnom = 170
-    #     Qnom = 105.35
-    #     load_start = 0.1*Pnom
-    #     load_increment = 0.01
-    #     load_prev = load_start - load_increment
-    #     stateIndex = 0
-    #     networkFailure = False
-    #
-    #
-    #     while not networkFailure:
-    #         #scaling
-    #         l_scaling = load_prev + load_increment
-    #         load_prev = l_scaling
-    #         qObj_env_noFACTS.env_2bus.net.load.p_mw =
-    #         qObj_env_FACTS =
-    #         qObj_env_FACTS_noSeries =
-    #         qObj_env_RLFACTS =
-    #         try:
-    #
-    #         except:
-    #             networkFailure = True
-
-
-
-
-

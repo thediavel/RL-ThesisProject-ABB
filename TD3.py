@@ -11,6 +11,7 @@ from torch.autograd import Variable
 import statistics as stat
 import matplotlib.pyplot as plt
 import math
+import pickle
 
 
 
@@ -377,7 +378,7 @@ class TD3:
         print(' max-min rewArr: ', max(rewArr), min(rewArr))
         return currentStateMeasurements, busVoltage, lp_max, lp_std, reward
 
-    def comparePerformance(self, steps, oper_upd_interval, bus_index_shunt, bus_index_voltage, line_index,testAllActionsFlag):
+    def comparePerformance(self, steps, oper_upd_interval, bus_index_shunt, bus_index_voltage, line_index,benchmarkFlag):
         v_noFACTS = []
         lp_max_noFACTS = []
         lp_std_noFACTS = []
@@ -390,9 +391,6 @@ class TD3:
         v_FACTS_noSeries = []
         lp_max_FACTS_noSeries = []
         lp_std_FACTS_noSeries = []
-        v_RLFACTS_allAct = []
-        lp_max_RLFACTS_allAct = []
-        lp_std_RLFACTS_allAct = []
         v_FACTS_eachTS = []
         lp_max_FACTS_eachTS = []
         lp_std_FACTS_eachTS = []
@@ -401,12 +399,11 @@ class TD3:
         rewardFactsEachTS=[]
         rewardFactsNoSeries=[]
         rewardFactsRL=[]
-        rewardFactsAllActions=[]
         self.env_2bus.setMode('test')
         self.env_2bus.reset()
         stateIndex = self.env_2bus.stateIndex
         loadProfile = self.env_2bus.loadProfile
-        performance=0;
+        performance=0
         while stateIndex + steps+4 > len(loadProfile):
             self.env_2bus.reset()  # Reset to get sufficient number of steps left in time series
             stateIndex = self.env_2bus.stateIndex
@@ -435,8 +432,7 @@ class TD3:
         qObj_env_RLFACTS = copy.deepcopy(temp)
         qObj_env_FACTS_noSeries = copy.deepcopy(temp)
         qObj_env_FACTS_eachTS = copy.deepcopy(temp)
-        if testAllActionsFlag:
-            qObj_env_RLFACTS_allAct = copy.deepcopy(temp)
+
 
         # Make sure FACTS devices disabled for noFACTS case and no Series for that case
         qObj_env_noFACTS.env_2bus.net.switch.at[0, 'closed'] = False
@@ -456,7 +452,7 @@ class TD3:
             lp_std_noFACTS.append(np.std(qObj_env_noFACTS.env_2bus.net.res_line.loading_percent))
             rewardNoFacts.append((200+(math.exp(abs(1 - qObj_env_noFACTS.env_2bus.net.res_bus.vm_pu[bus_index_voltage]) * 10) * -20) - np.std(qObj_env_noFACTS.env_2bus.net.res_line.loading_percent))/200)
 
-
+            # FACTS with both series and shunt
             v_ref = 1
             if i % oper_upd_interval == 0:
                 lp_reference = qObj_env_FACTS.lp_ref()
@@ -466,8 +462,7 @@ class TD3:
             v_FACTS.append(voltage)
             lp_max_FACTS.append(lp_max)
             lp_std_FACTS.append(lp_std)
-            rewFacts=(200+(math.exp(abs(1 - voltage) * 10) * -20) - lp_std)/200 ;
-            #rewardFacts.append( )#
+            rewFacts=(200+(math.exp(abs(1 - voltage) * 10) * -20) - lp_std)/200;
 
 
             # FACTS no Series compensation
@@ -478,8 +473,6 @@ class TD3:
             lp_std_FACTS_noSeries.append(lp_std)
             rewFactsNoSeries=(200+(math.exp(abs(1 - voltage) * 10) * -20) - lp_std)/200 ;
 
-            #rewardFactsNoSeries.append((200+(math.exp(abs(1 - voltage) * 10) * -20) - lp_std)/200  )
-
             # FACTS with both series and shunt, with system operator update EACH time step
             lp_reference_eachTS = qObj_env_FACTS_eachTS.lp_ref()
             #print('eachTS', lp_reference_eachTS)
@@ -488,9 +481,7 @@ class TD3:
             v_FACTS_eachTS.append(voltage)
             lp_max_FACTS_eachTS.append(lp_max)
             lp_std_FACTS_eachTS.append(lp_std)
-            rewFactsEachTS=(200+(math.exp(abs(1 - voltage) * 10) * -20) - lp_std)/200 ;
-
-            #rewardFactsEachTS.append((200+(math.exp(abs(1 - voltage) * 10) * -20) - lp_std)/200  )             # FACTS with both series and shunt
+            #rewFactsEachTS=(200+(math.exp(abs(1 - voltage) * 10) * -20) - lp_std)/200 ;
 
             # RLFACTS
             takeLastAction=False;
@@ -502,16 +493,7 @@ class TD3:
             v_RLFACTS.append(voltage)
             lp_max_RLFACTS.append(lp_max)
             lp_std_RLFACTS.append(lp_std)
-
             rewardFactsRL.append(r)          # FACTS with both series and shunt
-
-            if testAllActionsFlag:
-            # RL All actions
-                currentState_RLAllAct, voltage, lp_max, lp_std, _ = qObj_env_RLFACTS_allAct.runFACTSallActionsRL(bus_index_voltage)
-                v_RLFACTS_allAct.append(voltage)
-                lp_max_RLFACTS_allAct.append(lp_max)
-                lp_std_RLFACTS_allAct.append(lp_std)
-                rewardFactsAllActions.append((200+(math.exp(abs(1 - voltage) * 10) * -20) - lp_std)/200  )    # FACTS with both series and shunt
 
             # Increment state
             stateIndex += 1
@@ -520,22 +502,36 @@ class TD3:
             qObj_env_FACTS_noSeries.env_2bus.scaleLoadAndPowerValue(stateIndex)
             qObj_env_FACTS_eachTS.env_2bus.scaleLoadAndPowerValue(stateIndex)
             rewFacts=0.7*rewFacts + 0.3*(200 + (math.exp(abs(1 - qObj_env_FACTS.env_2bus.net.res_bus.vm_pu[1]) * 10) * -20) - np.std(qObj_env_FACTS.env_2bus.net.res_line.loading_percent)) / 200
-            rewardFacts.append(rewFacts  )
+            rewardFacts.append(rewFacts)
             rewFactsNoSeries=0.7*rewFactsNoSeries + 0.3*(200 + (math.exp(abs(1 - qObj_env_FACTS_noSeries.env_2bus.net.res_bus.vm_pu[1]) * 10) * -20) - np.std(qObj_env_FACTS_noSeries.env_2bus.net.res_line.loading_percent)) / 200
-            rewardFactsNoSeries.append(rewFactsNoSeries  )
+            rewardFactsNoSeries.append(rewFactsNoSeries)
             rewFactsEachTS=0.7*rewFacts + 0.3*(200 + (math.exp(abs(1 - qObj_env_FACTS_eachTS.env_2bus.net.res_bus.vm_pu[1]) * 10) * -20) - np.std(qObj_env_FACTS_eachTS.env_2bus.net.res_line.loading_percent)) / 200
-            rewardFactsEachTS.append(rewFactsEachTS )             # FACTS with both series and shunt
-            if ( rewFacts-r < 0.01) and (rewFactsNoSeries-r < 0.01) :
-                performance+=1;
-
-
-
-
+            rewardFactsEachTS.append(rewFactsEachTS)             # FACTS with both series and shunt
+            if (rewFacts-r < 0.01) and (rewFactsNoSeries-r < 0.01):
+                performance+=1
 
         print(performance/steps)
         print('mean reward facts:',np.mean(rewardFacts))
         print('mean reward facts with RL:',np.mean(rewardFactsRL))
         print('mean reward facts no series:',np.mean(rewardFactsNoSeries))
+
+        # Get benchmark from pickle files:
+        if benchmarkFlag:
+            with open('Data/voltBenchmark.pkl', 'rb') as pickle_file:
+                v_RLFACTS_Benchmark = pickle.load(pickle_file)
+                v_RLFACTS_Benchmark = v_RLFACTS_Benchmark[0:steps]
+            with open('Data/lpmaxBenchmark.pkl', 'rb') as pickle_file:
+                lp_max_RLFACTS_Benchmark = pickle.load(pickle_file)
+                lp_max_RLFACTS_Benchmark = lp_max_RLFACTS_Benchmark[0:steps]
+            with open('Data/lpstdBenchmark.pkl', 'rb') as pickle_file:
+                lp_std_RLFACTS_Benchmark = pickle.load(pickle_file)
+                #print(lp_std_RLFACTS_Benchmark)
+                lp_std_RLFACTS_Benchmark = lp_std_RLFACTS_Benchmark[0:steps]
+                #print(lp_std_RLFACTS_Benchmark)
+            with open('Data/rewBenchmark.pkl', 'rb') as pickle_file:
+                rewardFactsBenchmark = pickle.load(pickle_file)
+                rewardFactsBenchmark = rewardFactsBenchmark[0:steps]
+
 
         # Make plots
         i_list = list(range(1, steps+1))
@@ -548,11 +544,12 @@ class TD3:
         ax1.plot(i_list, v_FACTS, color='g')
         ax1.plot(i_list, v_FACTS_noSeries, color='k')
         ax1.plot(i_list, v_RLFACTS, color='r')
-        ax1.plot(i_list, v_FACTS_eachTS, color= 'c')
-        if testAllActionsFlag:
-         ax1.plot(i_list, v_RLFACTS_allAct, color='y')
+        #ax1.plot(i_list, v_FACTS_eachTS, color= 'c')
+        if benchmarkFlag:
+         ax1.plot(i_list, v_RLFACTS_Benchmark, color='y')
 
-        ax1.legend(['v no facts', 'v facts' , 'v facts no series comp','v RL facts', 'v RL facts upd each ts', 'v RL all act.'], loc=2)
+        #ax1.legend(['v no facts', 'v facts' , 'v facts no series comp','v RL facts', 'v RL facts upd each ts', 'v RL benchmark'], loc=2)
+        ax1.legend(['v no facts', 'v facts shunt+series', 'v facts shunt only', 'v RL facts', 'v RL benchmark'], loc=2)
         ax2 = ax1.twinx()
 
         color = 'tab:blue'
@@ -561,15 +558,54 @@ class TD3:
         ax2.plot(i_list, lp_std_FACTS, color='g',linestyle = 'dashed')
         ax2.plot(i_list, lp_std_FACTS_noSeries, color='k', linestyle = 'dashed')
         ax2.plot(i_list, lp_std_RLFACTS, color='r', linestyle = 'dashed')
-        ax2.plot(i_list, lp_std_FACTS_eachTS, color='c', linestyle = 'dashed')
-        if testAllActionsFlag:
-            ax2.plot(i_list, lp_std_RLFACTS_allAct, color='y', linestyle='dashed')
-        ax2.legend(['std lp no facts', 'std lp facts', 'std lp facts no series comp', 'std lp RL facts', 'std lp facts each ts', 'std lp RL all act.' ], loc=1)
+        #ax2.plot(i_list, lp_std_FACTS_eachTS, color='c', linestyle = 'dashed')
+        if benchmarkFlag:
+            ax2.plot(i_list, lp_std_RLFACTS_Benchmark, color='y', linestyle='dashed')
+        #ax2.legend(['std lp no facts', 'std lp facts', 'std lp facts no series comp', 'std lp RL facts', 'std lp facts each ts', 'std lp RL benchmark' ], loc=1)
+        ax2.legend(['std lp no facts', 'std lp facts shunt+series', 'std lp facts shunt only', 'std lp RL facts', 'std lp RL benchmark'], loc=1)
+        plt.grid()
         plt.show()
+
+        # Plot Rewards
+        fig2 = plt.figure()
+        color = 'tab:blue'
+        plt.plot(i_list, rewardNoFacts, Figure=fig2, color=color)
+        plt.plot(i_list, rewardFacts, Figure=fig2, color='g')
+        plt.plot(i_list, rewardFactsNoSeries, Figure=fig2, color='k')
+        plt.plot(i_list, rewardFactsRL, Figure=fig2, color='r')
+        #plt.plot(i_list, rewardFactsEachTS, Figure=fig2, color='c')
+        if benchmarkFlag:
+            plt.plot(i_list, rewardFactsBenchmark, Figure=fig2, color='y')
+        plt.title('Rewards as per Environment Setup')
+        plt.xlabel('TimeStep', Figure=fig2)
+        plt.ylabel('Reward', Figure=fig2, color=color)
+        #plt.legend(['no FACTS', 'FACTS', 'FACTS no series comp', 'RL FACTS', 'FACTS each ts', 'RL FACTS benchmark.'],
+        #           loc=1)
+        plt.legend(['no FACTS', 'FACTS', 'FACTS no series comp', 'RL FACTS', 'RL FACTS benchmark.'],
+                   loc=1)
+        plt.grid()
+        plt.show()
+
+        ## Calculate measure for comparing RL and Benchmark wrt reward.
+        performanceFactsRL = 0
+        performanceFacts = 0
+        performanceFactsnoSeries = 0
+        PerformanceNoFacts = 0
+        for i in range(0,steps):
+            performanceFactsRL += math.sqrt((rewardFactsRL[i]-rewardFactsBenchmark[i])**2)
+            performanceFacts += math.sqrt((rewardFacts[i] - rewardFactsBenchmark[i]) ** 2)
+            performanceFactsnoSeries += math.sqrt((rewardFactsNoSeries[i] - rewardFactsBenchmark[i]) ** 2)
+            PerformanceNoFacts += math.sqrt((rewardNoFacts[i] - rewardFactsBenchmark[i]) ** 2)
+
+        print('performance FACTS RL: ', performanceFactsRL)
+        print('performance FACTS shunt+series: ', performanceFacts)
+        print('performance FACTS shunt only: ', performanceFactsnoSeries)
+        print('performance no FACTS: ', PerformanceNoFacts)
 
         # Nosecurve:
         loading_arr_sorted = sorted(loading_arr)
-        print(loading_arr_sorted)
+
+        # Sort the measurements
         v_noFACTS_sorted = [x for _, x in sorted(zip(loading_arr, v_noFACTS))]
         lp_max_noFACTS_sorted = [x for _, x in sorted(zip(loading_arr, lp_max_noFACTS))]
         v_FACTS_sorted = [x for _, x in sorted(zip(loading_arr, v_FACTS))]
@@ -580,52 +616,33 @@ class TD3:
         lp_max_FACTS_noSeries_sorted = [x for _, x in sorted(zip(loading_arr, lp_max_FACTS_noSeries))]
         v_FACTS_eachTS_sorted = [x for _, x in sorted(zip(loading_arr, v_FACTS_eachTS))]
         lp_max_FACTS_eachTS_sorted = [x for _, x in sorted(zip(loading_arr, lp_max_FACTS_eachTS))]
-        if testAllActionsFlag:
-            v_RLFACTS_allAct_sorted = [x for _, x in sorted(zip(loading_arr, v_RLFACTS_allAct))]
-            lp_max_RLFACTS_allAct_sorted = [x for _, x in sorted(zip(loading_arr, lp_max_RLFACTS_allAct))]
+        if benchmarkFlag:
+            v_RLFACTS_Benchmark_sorted = [x for _, x in sorted(zip(loading_arr, v_RLFACTS_Benchmark))]
+            lp_max_RLFACTS_Benchmark_sorted = [x for _, x in sorted(zip(loading_arr, lp_max_RLFACTS_Benchmark))]
 
-        #Trim arrays to only include values <= 100 % loading percentage
-        lp_limit_for_noseCurve = 120
+        #Trim arrays to only include values <= X % loading percentage
+        lp_limit_for_noseCurve = 100
         lp_max_noFACTS_sorted_trim = [x for x in lp_max_noFACTS_sorted if x <= lp_limit_for_noseCurve]
         lp_max_FACTS_sorted_trim = [x for x in lp_max_FACTS_sorted if x <= lp_limit_for_noseCurve]
         lp_max_RLFACTS_sorted_trim = [x for x in lp_max_RLFACTS_sorted if x <= lp_limit_for_noseCurve]
         lp_max_FACTS_noSeries_sorted_trim = [x for x in lp_max_FACTS_noSeries_sorted if x <= lp_limit_for_noseCurve]
         lp_max_FACTS_eachTS_sorted_trim = [x for x in lp_max_FACTS_eachTS_sorted if x <= lp_limit_for_noseCurve]
-        if testAllActionsFlag:
-            lp_max_RLFACTS_allAct_sorted_trim = [x for x in lp_max_RLFACTS_allAct_sorted if x <= lp_limit_for_noseCurve]
-
+        if benchmarkFlag:
+            lp_max_RLFACTS_Benchmark_sorted_trim = [x for x in lp_max_RLFACTS_Benchmark_sorted if x <= lp_limit_for_noseCurve]
         v_noFACTS_sorted_trim = v_noFACTS_sorted[0:len(lp_max_noFACTS_sorted_trim)]
         v_FACTS_sorted_trim = v_FACTS_sorted[0:len(lp_max_FACTS_sorted_trim)]
         v_RLFACTS_sorted_trim = v_RLFACTS_sorted[0:len(lp_max_RLFACTS_sorted_trim)]
         v_FACTS_noSeries_sorted_trim = v_FACTS_noSeries_sorted[0:len(lp_max_FACTS_noSeries_sorted_trim)]
         v_FACTS_eachTS_sorted_trim = v_FACTS_eachTS_sorted[0:len(lp_max_FACTS_eachTS_sorted_trim)]
-        if testAllActionsFlag:
-            v_RLFACTS_allAct_sorted_trim = v_RLFACTS_allAct_sorted[0:len(lp_max_RLFACTS_allAct_sorted_trim)]
-
+        if benchmarkFlag:
+            v_RLFACTS_Benchmark_sorted_trim = v_RLFACTS_Benchmark_sorted[0:len(lp_max_RLFACTS_Benchmark_sorted_trim)]
         loading_arr_plot_noFACTS = loading_arr_sorted[0:len(lp_max_noFACTS_sorted_trim)]
         loading_arr_plot_FACTS = loading_arr_sorted[0:len(lp_max_FACTS_sorted_trim)]
         loading_arr_plot_RLFACTS = loading_arr_sorted[0:len(lp_max_RLFACTS_sorted_trim)]
         loading_arr_plot_FACTS_noSeries = loading_arr_sorted[0:len(lp_max_FACTS_noSeries_sorted_trim)]
         loading_arr_plot_FACTS_eachTS = loading_arr_sorted[0:len(lp_max_FACTS_eachTS_sorted_trim)]
-        if testAllActionsFlag:
-            loading_arr_plot_RLFACTS_allAct = loading_arr_sorted[0:len(lp_max_RLFACTS_allAct_sorted_trim)]
-
-        #Plot Rewards
-        fig2 = plt.figure()
-        color = 'tab:blue'
-        #plt.plot(i_list, rewardNoFacts, Figure=fig2, color=color)
-        plt.plot(i_list, rewardFacts, Figure=fig2, color='g')
-        plt.plot(i_list, rewardFactsNoSeries, Figure=fig2, color='k')
-        plt.plot(i_list, rewardFactsRL, Figure=fig2, color='r')
-        #plt.plot(i_list, rewardFactsEachTS, Figure=fig2, color='c')
-        #if testAllActionsFlag:
-        #    plt.plot(i_list, rewardFactsAllActions, Figure=fig2, color='y')
-        plt.title('Rewards as per Environment Setup')
-        plt.xlabel('TimeStep',  Figure=fig2)
-        plt.ylabel('Reward',  Figure=fig2, color=color)
-        plt.legend([ 'FACTS', 'FACTS no series comp','RL FACTS'], loc=1)
-        plt.show()
-
+        if benchmarkFlag:
+            loading_arr_plot_RLFACTS_Benchmark = loading_arr_sorted[0:len(lp_max_RLFACTS_Benchmark_sorted_trim)]
 
         #Plot Nose Curve
         fig3 = plt.figure()
@@ -634,11 +651,13 @@ class TD3:
         plt.plot(loading_arr_plot_FACTS, v_FACTS_sorted_trim, Figure=fig3, color='g')
         plt.plot(loading_arr_plot_FACTS_noSeries, v_FACTS_noSeries_sorted_trim, Figure=fig3, color='k')
         plt.plot(loading_arr_plot_RLFACTS, v_RLFACTS_sorted_trim, Figure=fig3, color='r')
-        plt.plot(loading_arr_plot_FACTS_eachTS, v_FACTS_eachTS_sorted_trim, Figure=fig3, color='c')
-        if testAllActionsFlag:
-            plt.plot(loading_arr_plot_RLFACTS_allAct, v_RLFACTS_allAct_sorted_trim, Figure=fig3, color='y')
+        #plt.plot(loading_arr_plot_FACTS_eachTS, v_FACTS_eachTS_sorted_trim, Figure=fig3, color='c')
+        if benchmarkFlag:
+            plt.plot(loading_arr_plot_RLFACTS_Benchmark, v_RLFACTS_Benchmark_sorted_trim, Figure=fig3, color='y')
         plt.title('Nose curve from episode with sorted voltage levels')
         plt.xlabel('Loading [p.u.]',  Figure=fig3)
         plt.ylabel('Bus Voltage [p.u.]',  Figure=fig3, color=color)
-        plt.legend(['v no FACTS', 'v FACTS', 'v FACTS no series comp','v RL FACTS', 'v FACTS each ts', 'v RL FACTS all act.'], loc=1)
+        #plt.legend(['v no FACTS', 'v FACTS', 'v FACTS no series comp','v RL FACTS', 'v FACTS each ts', 'v RL FACTS benchmark.'], loc=1)
+        plt.legend(['v no FACTS', 'v FACTS', 'v FACTS no series comp', 'v RL FACTS', 'v RL FACTS benchmark.'], loc=1)
+        plt.grid()
         plt.show()

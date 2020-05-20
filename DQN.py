@@ -405,9 +405,6 @@ class DQN:
         v_FACTS_noSeries = []
         lp_max_FACTS_noSeries = []
         lp_std_FACTS_noSeries = []
-        v_RLFACTS_allAct = []
-        lp_max_RLFACTS_allAct = []
-        lp_std_RLFACTS_allAct = []
         v_FACTS_eachTS = []
         lp_max_FACTS_eachTS = []
         lp_std_FACTS_eachTS = []
@@ -416,12 +413,11 @@ class DQN:
         rewardFactsEachTS = []
         rewardFactsNoSeries = []
         rewardFactsRL = []
-        rewardFactsAllActions = []
         self.env_2bus.setMode('test')
         self.env_2bus.reset()
         stateIndex = self.env_2bus.stateIndex
         loadProfile = self.env_2bus.loadProfile
-        performance=0;
+        performance=0
         while stateIndex + steps+4 > len(loadProfile):
             self.env_2bus.reset()  # Reset to get sufficient number of steps left in time series
             stateIndex = self.env_2bus.stateIndex
@@ -450,8 +446,7 @@ class DQN:
         qObj_env_RLFACTS = copy.deepcopy(temp)
         qObj_env_FACTS_noSeries = copy.deepcopy(temp)
         qObj_env_FACTS_eachTS = copy.deepcopy(temp)
-        # if benchmarkFlag:
-        #     qObj_env_RLFACTS_allAct = copy.deepcopy(temp)
+
 
         # Make sure FACTS devices disabled for noFACTS case and no Series for that case
         qObj_env_noFACTS.env_2bus.net.switch.at[0, 'closed'] = False
@@ -499,7 +494,7 @@ class DQN:
             v_FACTS_eachTS.append(voltage)
             lp_max_FACTS_eachTS.append(lp_max)
             lp_std_FACTS_eachTS.append(lp_std)
-            rewFactsEachTS=(200+(math.exp(abs(1 - voltage) * 10) * -20) - lp_std)/200 ;
+            #rewFactsEachTS=(200+(math.exp(abs(1 - voltage) * 10) * -20) - lp_std)/200 ;
 
             # RLFACTS
             takeLastAction=False;
@@ -512,15 +507,6 @@ class DQN:
             lp_max_RLFACTS.append(lp_max)
             lp_std_RLFACTS.append(lp_std)
             rewardFactsRL.append(r)          # FACTS with both series and shunt
-
-
-            # if benchmarkFlag:
-            # # RL All actions
-            #     currentState_RLAllAct, voltage, lp_max, lp_std, _ = qObj_env_RLFACTS_allAct.runFACTSallActionsRL(bus_index_voltage)
-            #     v_RLFACTS_allAct.append(voltage)
-            #     lp_max_RLFACTS_allAct.append(lp_max)
-            #     lp_std_RLFACTS_allAct.append(lp_std)
-            #     rewardFactsAllActions.append((200 + (math.exp(abs(1 - voltage) * 10) * -20) - lp_std) / 200)  # FACTS with both series and shunt
 
             # Increment state
             stateIndex += 1
@@ -540,10 +526,14 @@ class DQN:
                         math.exp(abs(1 - qObj_env_FACTS_eachTS.env_2bus.net.res_bus.vm_pu[1]) * 10) * -20) - np.std(
                 qObj_env_FACTS_eachTS.env_2bus.net.res_line.loading_percent)) / 200
             rewardFactsEachTS.append(rewFactsEachTS)  # FACTS with both series and shunt
-            if r > rewFacts and r > rewFactsNoSeries:
+            if (rewFacts-r < 0.01) and (rewFactsNoSeries-r < 0.01):
                 performance += 1;
 
         print(performance/steps)
+        print('mean reward facts:', np.mean(rewardFacts))
+        print('mean reward facts with RL:', np.mean(rewardFactsRL))
+        print('mean reward facts no series:', np.mean(rewardFactsNoSeries))
+
         # Get benchmark from pickle files:
         if benchmarkFlag:
             with open('Data/voltBenchmark.pkl', 'rb') as pickle_file:
