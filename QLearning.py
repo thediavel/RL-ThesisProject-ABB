@@ -247,7 +247,7 @@ class qLearning:
                 currentState=self.getStateFromMeasurements_2([oldMeasurements,currentMeasurements]);
                 if epsComp <= self.epsilon:
                         # Exploration Part
-                     actionIndex = np.random.choice(99, 1)[0]
+                     actionIndex = np.random.choice(len(self.actions), 1)[0]
                 else:
                         # Greedy Approach
                     actionIndex=self.q_table[currentState].idxmax();
