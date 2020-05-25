@@ -742,19 +742,21 @@ class powerGrid_ieee2:
 
     def runNoFACTS(self, busVoltageInd):
         #Start from 0 when inside for loop
-        self.stateIndex = -1
+        self.stateIndex = 859
 
         # Bypass FACTS devices
         self.net.switch.at[0, 'closed'] = True
         self.net.switch.at[1, 'closed'] = False
+        self.net.controller.in_service[1] = True
         self.shuntControl.ref = 1
         self.seriesControl.ref = 50
 
         # Create array
         v_arr = []
+        l_arr = []
 
         # Loop through all loadings
-        for i in range(0, len(self.loadProfile)):
+        for i in range(0, 600): #len(self.loadProfile)
             # Increment and run environment
             self.stateIndex += 1;
             self.scaleLoadAndPowerValue(self.stateIndex);
@@ -762,53 +764,17 @@ class powerGrid_ieee2:
 
             # Store result for current settings
             v_arr.append(self.net.res_bus.vm_pu[busVoltageInd])
+            l_arr.append(self.stateIndex)
 
         # Plot result
         print(max(v_arr))
         print(min(v_arr))
-        plt.plot(v_arr)
+        plt.plot(l_arr, v_arr)
+        plt.grid()
+        plt.xlabel('Time step on load profile [-]', fontsize= 18 )
+        plt.ylabel('Voltage [pu]', fontsize= 18)
+        plt.title('Bus 2 Voltage with shunt+series FACTS ', fontsize= 22)
         plt.show()
-
-    # ## Transition from reference line loading to reactance of series comp
-    # def K_x_comp_pu(self, loading_perc_ref, line_index, k_old):
-    #     c = 5  # Coefficient for transition tuned to hit equal load sharing at nominal IEEE
-    #     #print((loading_perc_ref,line_index,k_old))
-    #     k_x_comp_max_ind = 0.4
-    #     k_x_comp_max_cap = -k_x_comp_max_ind
-    #     loading_perc_meas = self.net.res_line.loading_percent[line_index]
-    #     k_delta = (c * k_x_comp_max_ind * (
-    #                 loading_perc_meas - loading_perc_ref) / 100) - k_old  # 100 To get percentage in pu
-    #     k_x_comp = k_delta + k_old
-    #
-    #     # Bypassing series device if impedance close to 0
-    #     if abs(k_x_comp) < 0.0001:  # Helping with convergence
-    #         self.net.switch.closed[1] = True  # ACTUAL network, not a copy
-    #
-    #     if k_x_comp > k_x_comp_max_ind:
-    #         k_x_comp = k_x_comp_max_ind
-    #     if k_x_comp < k_x_comp_max_cap:
-    #         k_x_comp = k_x_comp_max_cap
-    #     return k_x_comp
-    #
-    # ## Transition from reference voltage to Q output of shunt device
-    # def Shunt_q_comp(self, v_ref_pu, bus_index, q_old):
-    #     v_bus_pu = self.net.res_bus.vm_pu[bus_index]
-    #     k = 10  # Coefficient for transition, tuned to hit 1 pu with nominal IEEE
-    #     q_rated = 100  # Mvar
-    #     q_min = -q_rated
-    #     q_max = q_rated
-    #     q_delta = k * q_rated * (
-    #                 v_bus_pu - v_ref_pu) - q_old  # q_old might come in handy later with RL if able to take actions without
-    #     # independent change in environment
-    #     q_comp = q_delta + q_old
-    #
-    #     if q_comp > q_max:
-    #         q_comp = q_max
-    #     if q_comp < q_min:
-    #         q_comp = q_min
-    #
-    #     # print(q_comp)
-    #     return q_comp
 
 
 ##Load Profile data has been pickled already, do not run this function for now
