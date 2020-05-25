@@ -201,6 +201,8 @@ class TD3:
                 action[0]=max(0,min(self.max_actions[0],action[0]*self.max_actions[0]+noise0[0]))
                 action[1]=max(0,min(self.max_actions[1],action[1]*self.max_actions[1]+noise1[0]))
                 #print(action)
+                #action[0]=action[0]*self.max_actions[0]
+                #action[1]=action[1] * self.max_actions[1]
                 currentMeasurements, reward, done, _ = self.env_2bus.takeAction(action[0], action[1]);
                 oldState = currentState;
                 currentState = np.append(currentState, [currentMeasurements], axis=0)
@@ -291,7 +293,7 @@ class TD3:
             if self.learn_step_counter % (self.policy_freq*self.UpdateAfter) == 1:
 
                 # Compute actor losse
-                actor_loss = -self.critic.Q1(state, self.actor(state)).mean()
+                actor_loss = -self.critic.Q1(state, self.actor(next_state)*torch.tensor(self.max_actions).cuda()).mean()
 
                 # Optimize the actor
                 self.actor_optimizer.zero_grad()
