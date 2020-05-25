@@ -529,10 +529,19 @@ class DQN:
             if (rewFacts-r < 0.01) and (rewFactsNoSeries-r < 0.01):
                 performance += 1;
 
-        print(performance/steps)
+        print('RL better than no RL in % wrt to reward: ', (performance / steps)*100)
+        print('max reward facts:', np.max(rewardFacts))
+        print('max reward facts with RL:', np.max(rewardFactsRL))
+        print('max reward facts no series:', np.max(rewardFactsNoSeries))
+        print('min reward facts:', np.min(rewardFacts))
+        print('min reward facts with RL:', np.min(rewardFactsRL))
+        print('min reward facts no series:', np.min(rewardFactsNoSeries))
         print('mean reward facts:', np.mean(rewardFacts))
         print('mean reward facts with RL:', np.mean(rewardFactsRL))
         print('mean reward facts no series:', np.mean(rewardFactsNoSeries))
+        print('std reward facts:', np.std(rewardFacts))
+        print('std reward facts with RL:', np.std(rewardFactsRL))
+        print('std reward facts no series:', np.std(rewardFactsNoSeries))
 
         # Get benchmark from pickle files:
         if benchmarkFlag:
@@ -615,6 +624,7 @@ class DQN:
             performanceFactsnoSeries += math.sqrt((rewardFactsNoSeries[i] - rewardFactsBenchmark[i]) ** 2)
             PerformanceNoFacts += math.sqrt((rewardNoFacts[i] - rewardFactsBenchmark[i]) ** 2)
 
+        print('')
         print('performance FACTS RL: ', performanceFactsRL)
         print('performance FACTS shunt+series: ', performanceFacts)
         print('performance FACTS shunt only: ', performanceFactsnoSeries)
@@ -662,6 +672,21 @@ class DQN:
         if benchmarkFlag:
             loading_arr_plot_RLFACTS_Benchmark = loading_arr_sorted[0:len(lp_max_RLFACTS_Benchmark_sorted_trim)]
 
+        #Print result wrt trimmed voltage
+        print('')
+        print('max voltage facts:', np.max(v_FACTS_sorted_trim))
+        print('max voltage facts with RL:', np.max(v_RLFACTS_sorted_trim))
+        print('max voltage facts no series:', np.max(v_FACTS_noSeries_sorted_trim))
+        print('min voltage facts:', np.min(v_FACTS_sorted_trim))
+        print('min voltage facts with RL:', np.min(v_RLFACTS_sorted_trim))
+        print('min voltage facts no series:', np.min(v_FACTS_noSeries_sorted_trim))
+        print('mean voltage facts:', np.mean(v_FACTS_sorted_trim))
+        print('mean voltage facts with RL:', np.mean(v_RLFACTS_sorted_trim))
+        print('mean voltage facts no series:', np.mean(v_FACTS_noSeries_sorted_trim))
+        print('std voltage facts:', np.std(v_FACTS_sorted_trim))
+        print('std voltage facts with RL:', np.std(v_RLFACTS_sorted_trim))
+        print('std voltage facts no series:', np.std(v_FACTS_noSeries_sorted_trim))
+
         #Plot Nose Curve
         fig3 = plt.figure()
         color = 'tab:blue'
@@ -679,8 +704,6 @@ class DQN:
         plt.legend(['v no FACTS', 'v FACTS', 'v FACTS no series comp', 'v RL FACTS', 'v RL FACTS benchmark.'], loc=1)
         plt.grid()
         plt.show()
-
-
 
 
     # This method replaces runFACTSallActionsRL as this saves result into picke file to be used after it has been run once.
