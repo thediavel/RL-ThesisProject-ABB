@@ -36,7 +36,23 @@ class Actor(nn.Module):
         return torch.sigmoid(self.l3(a))
 
 class Critic(nn.Module):
-    def __init__(self, state_dim, action_dim,p=0.3):
+    # def __init__(self, state_dim, action_dim,p=0.3):
+    #     super(Critic, self).__init__()
+    #
+    #     # Q1 architecture
+    #     self.l1 = nn.Linear(state_dim + action_dim, (state_dim + action_dim)*2)
+    #     self.l2 = nn.Linear((state_dim + action_dim)*2, (state_dim + action_dim)*4)
+    #     self.l3 = nn.Linear((state_dim + action_dim)*4, 1)
+    #     self.drop_layer1 = nn.Dropout(p=p)
+    #     self.drop_layer2 = nn.Dropout(p=p)
+    #     # Q2 architecture
+    #     self.l4 = nn.Linear(state_dim + action_dim, (state_dim + action_dim)*2)
+    #     self.l5 = nn.Linear((state_dim + action_dim)*2,(state_dim + action_dim)*4)
+    #     self.l6 = nn.Linear((state_dim + action_dim)*4, 1)
+    #     self.drop_layer3 = nn.Dropout(p=p)
+    #     self.drop_layer4 = nn.Dropout(p=p)
+
+    def __init__(self, state_dim, action_dim, p=0.3):
         super(Critic, self).__init__()
 
         # Q1 architecture
@@ -53,13 +69,15 @@ class Critic(nn.Module):
         sa = torch.cat([state, action], 1)
 
         q1 = F.relu(self.l1(sa))
+        q1 = self.drop_layer1(q1);
         q1 = F.relu(self.l2(q1))
-        q1 = self.drop_layer(q1);
+        q1 = self.drop_layer2(q1);
         q1 = self.l3(q1)
 
         q2 = F.relu(self.l4(sa))
+        q2 = self.drop_layer3(q2);
         q2 = F.relu(self.l5(q2))
-        q2 = self.drop_layer(q2);
+        q2 = self.drop_layer4(q2);
         q2 = self.l6(q2)
         return q1, q2
 
@@ -67,14 +85,16 @@ class Critic(nn.Module):
         sa = torch.cat([state, action], 1)
 
         q1 = F.relu(self.l1(sa))
+        q1 = self.drop_layer1(q1);
         q1 = F.relu(self.l2(q1))
-        q1 = self.drop_layer(q1);
+        q1 = self.drop_layer2(q1);
         q1 = self.l3(q1)
         return q1
 
 class TD3:
     def __init__(self, ieeeBusSystem, lr, memorySize, batchSize,  decayRate, numOfEpisodes, stepsPerEpisode,tau,policy_freq,updateAfter):
         prefix='td3'
+
         self.env_2bus = powerGrid_ieee2('td3');
         self.max_actions=[150,1.1]
         self.actor = Actor(24, 2)
@@ -146,6 +166,15 @@ class TD3:
         #self.noise_clip = noise_clip
         self.policy_freq = policy_freq
         self.total_it = 0
+        #self.writer = SummaryWriter(
+        #    'runs/' + self.fileName);
+        #dummystate, dummyaction, _, _, _ = self.memory.sample(1);
+        #self.writer.add_graph(self.actor,torch.FloatTensor(dummystate).cuda())
+        #print(dummystate)
+        #self.writer.add_graph(self.critic,
+        #                      [torch.FloatTensor(dummystate).cuda(),torch.FloatTensor(dummyaction).cuda()])
+        #self.writer.close()
+
 
     def select_action(self, state):
         state = torch.FloatTensor(state.reshape(1, -1)).cuda()
