@@ -36,7 +36,8 @@ class ieee2_net(nn.Module):
         self.fc3 = nn.Linear(input*2*2, num_actions);
         #self.fc3 = nn.Linear(18, 54);
         #self.fc4 = nn.Linear(54, num_actions)
-        self.drop_layer = nn.Dropout(p=p)
+        self.drop_layer1 = nn.Dropout(p=p)
+        self.drop_layer2 = nn.Dropout(p=p)
 
     def forward(self, x):
         #x = F.relu(self.conv1(x))
@@ -44,9 +45,9 @@ class ieee2_net(nn.Module):
         #x = self.drop_layer(x);
 
         x = F.relu(self.fc1(x.view(x.size(0), -1)))
-        x = self.drop_layer(x);
+        x = self.drop_layer1(x);
         x=F.relu(self.fc2(x))
-        x = self.drop_layer(x);
+        x = self.drop_layer2(x);
         x = F.relu(self.fc3(x))
         return x
 

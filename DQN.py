@@ -77,6 +77,15 @@ class DQN:
             #if next(self.eval_net.parameters()).is_cuda:
             #    print('done')
 
+        self.writer = SummaryWriter(
+            'runs/' + self.fileName);
+        dummystate, dummyaction, _, _, _ = self.memory.sample(1);
+        # self.writer.add_graph(self.actor,torch.FloatTensor(dummystate).cuda())
+        print(dummystate)
+        self.writer.add_graph(self.eval_net,
+                              torch.FloatTensor(dummystate).cuda())
+        self.writer.close()
+
     def store_transition(self, s, a, r, done,s_):
         #print((s, a, r, s_, done))
         self.memory.push(s, a, r, s_, done)
