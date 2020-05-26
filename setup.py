@@ -744,9 +744,10 @@ class powerGrid_ieee2:
         #Start from 0 when inside for loop
         self.stateIndex = 859
 
-        # Bypass FACTS devices
+        # Bypass FACTS devices if wantd
         self.net.switch.at[0, 'closed'] = True
         self.net.switch.at[1, 'closed'] = False
+        self.net.controller.in_service[0] = True
         self.net.controller.in_service[1] = True
         self.shuntControl.ref = 1
         self.seriesControl.ref = 50
