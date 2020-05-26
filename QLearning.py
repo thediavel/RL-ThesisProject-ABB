@@ -291,7 +291,7 @@ class qLearning:
         self.env_2bus.seriesControl.ref = lp_ref;
         self.env_2bus.runEnv(runControl=True)
         busVoltage = self.env_2bus.net.res_bus.vm_pu[bus_index_voltage]
-        lp_max = max(self.env_2bus.net.res_line.loading_percent)
+        lp_max = min(self.env_2bus.net.res_line.loading_percent)
         lp_std = np.std(self.env_2bus.net.res_line.loading_percent)
         return busVoltage, lp_max, lp_std
 
@@ -330,6 +330,8 @@ class qLearning:
         rewardFactsEachTS = []
         rewardFactsNoSeries = []
         rewardFactsRL = []
+        v_RLFACTS_AfterLoadChange = []
+        lp_max_RLFACTS_AfterLoadChange = []
         self.env_2bus.setMode('test')
         self.env_2bus.reset()
         stateIndex = self.env_2bus.stateIndex
@@ -380,7 +382,7 @@ class qLearning:
             # no FACTS
             qObj_env_noFACTS.env_2bus.runEnv(runControl=False)  # No FACTS, no control
             v_noFACTS.append(qObj_env_noFACTS.env_2bus.net.res_bus.vm_pu[bus_index_voltage])
-            lp_max_noFACTS.append(max(qObj_env_noFACTS.env_2bus.net.res_line.loading_percent))
+            lp_max_noFACTS.append(min(qObj_env_noFACTS.env_2bus.net.res_line.loading_percent))
             lp_std_noFACTS.append(np.std(qObj_env_noFACTS.env_2bus.net.res_line.loading_percent))
             rewardNoFacts.append((200 + (math.exp(
                 abs(1 - qObj_env_noFACTS.env_2bus.net.res_bus.vm_pu[bus_index_voltage]) * 10) * -20) - np.std(
@@ -434,7 +436,8 @@ class qLearning:
             lp_std_RLFACTS.append(lp_std)
             rewardFactsRL.append(r)  # FACTS with both series and shunt
             currentMeasurements = qObj_env_RLFACTS.env_2bus.getCurrentState();
-
+            v_RLFACTS_AfterLoadChange.append(qObj_env_RLFACTS.env_2bus.net.res_bus.vm_pu[1])
+            lp_max_RLFACTS_AfterLoadChange.append(max(qObj_env_RLFACTS.env_2bus.net.res_line.loading_percent))
 
             # Increment state
             stateIndex += 1
@@ -472,23 +475,24 @@ class qLearning:
         print('std reward facts with RL:', np.std(rewardFactsRL))
         print('std reward facts no series:', np.std(rewardFactsNoSeries))
 
+        #remove last element in voltage after load change to get correct dimensions
+        v_RLFACTS_AfterLoadChange.pop()
 
         # Get benchmark from pickle files:
-        if benchmarkFlag:
-            with open('Data/voltBenchmark.pkl', 'rb') as pickle_file:
-                v_RLFACTS_Benchmark = pickle.load(pickle_file)
-                v_RLFACTS_Benchmark = v_RLFACTS_Benchmark[0:steps]
-            with open('Data/lpmaxBenchmark.pkl', 'rb') as pickle_file:
-                lp_max_RLFACTS_Benchmark = pickle.load(pickle_file)
-                lp_max_RLFACTS_Benchmark = lp_max_RLFACTS_Benchmark[0:steps]
-            with open('Data/lpstdBenchmark.pkl', 'rb') as pickle_file:
-                lp_std_RLFACTS_Benchmark = pickle.load(pickle_file)
-                # print(lp_std_RLFACTS_Benchmark)
-                lp_std_RLFACTS_Benchmark = lp_std_RLFACTS_Benchmark[0:steps]
-                # print(lp_std_RLFACTS_Benchmark)
-            with open('Data/rewBenchmark.pkl', 'rb') as pickle_file:
-                rewardFactsBenchmark = pickle.load(pickle_file)
-                rewardFactsBenchmark = rewardFactsBenchmark[0:steps]
+        with open('Data/voltBenchmark.pkl', 'rb') as pickle_file:
+            v_RLFACTS_Benchmark = pickle.load(pickle_file)
+            v_RLFACTS_Benchmark = v_RLFACTS_Benchmark[0:steps]
+        with open('Data/lpmaxBenchmark.pkl', 'rb') as pickle_file:
+            lp_max_RLFACTS_Benchmark = pickle.load(pickle_file)
+            lp_max_RLFACTS_Benchmark = lp_max_RLFACTS_Benchmark[0:steps]
+        with open('Data/lpstdBenchmark.pkl', 'rb') as pickle_file:
+            lp_std_RLFACTS_Benchmark = pickle.load(pickle_file)
+            # print(lp_std_RLFACTS_Benchmark)
+            lp_std_RLFACTS_Benchmark = lp_std_RLFACTS_Benchmark[0:steps]
+            # print(lp_std_RLFACTS_Benchmark)
+        with open('Data/rewBenchmark.pkl', 'rb') as pickle_file:
+            rewardFactsBenchmark = pickle.load(pickle_file)
+            rewardFactsBenchmark = rewardFactsBenchmark[0:steps]
 
         # Make plots
         i_list = list(range(1, steps + 1))
@@ -519,8 +523,8 @@ class qLearning:
         if benchmarkFlag:
             ax2.plot(i_list, lp_std_RLFACTS_Benchmark, color='y', linestyle='dashed')
         # ax2.legend(['std lp no facts', 'std lp facts', 'std lp facts no series comp', 'std lp RL facts', 'std lp facts each ts', 'std lp RL benchmark' ], loc=1)
-        ax2.legend(['std lp no facts', 'std lp facts shunt+series', 'std lp facts shunt only', 'std lp RL facts',
-                    'std lp RL benchmark'], loc=1)
+        ax2.legend(['std lp no facts', 'std lp facts shunt+series', 'std lp facts shunt only', 'std lp $Q$-learning facts',
+                    'std lp $Q$-learning benchmark'], loc=1)
         plt.grid()
         plt.show()
 
@@ -539,7 +543,7 @@ class qLearning:
         plt.ylabel('Reward', Figure=fig2, color=color)
         # plt.legend(['no FACTS', 'FACTS', 'FACTS no series comp', 'RL FACTS', 'FACTS each ts', 'RL FACTS benchmark.'],
         #           loc=1)
-        plt.legend(['no FACTS', 'FACTS', 'FACTS no series comp', 'RL FACTS', 'RL FACTS benchmark.'],
+        plt.legend(['no FACTS', 'FACTS', 'FACTS no series comp', '$Q$-learning FACTS', '$Q$-learning FACTS benchmark.'],
                    loc=1)
         plt.grid()
         plt.show()
@@ -578,6 +582,15 @@ class qLearning:
         if benchmarkFlag:
             v_RLFACTS_Benchmark_sorted = [x for _, x in sorted(zip(loading_arr, v_RLFACTS_Benchmark))]
             lp_max_RLFACTS_Benchmark_sorted = [x for _, x in sorted(zip(loading_arr, lp_max_RLFACTS_Benchmark))]
+        v_RLFACTS_AfterLoadChange_sorted = [x for _, x in sorted(zip(loading_arr, v_RLFACTS_AfterLoadChange))]
+        lp_max_RLFACTS_AfterLoadChange_sorted = [x for _, x in sorted(zip(loading_arr, lp_max_RLFACTS_AfterLoadChange))]
+        print('')
+        print('maximum loading percentage noFACTS  ', max(lp_max_noFACTS))
+        print('maximum loading percentage Shunt+Series  ', max(lp_max_FACTS))
+        print('maximum loading percentage shunt only  ', max(lp_max_FACTS_noSeries))
+        print('maximum loading percentage after action RL: ', max(lp_max_RLFACTS_Benchmark))
+        print('maximum loading percentage after load change RL: ', max(lp_max_RLFACTS_AfterLoadChange))
+
 
         # Trim arrays to only include values <= X % loading percentage
         lp_limit_for_noseCurve = 100
@@ -589,6 +602,8 @@ class qLearning:
         if benchmarkFlag:
             lp_max_RLFACTS_Benchmark_sorted_trim = [x for x in lp_max_RLFACTS_Benchmark_sorted if
                                                     x <= lp_limit_for_noseCurve]
+        lp_max_RLFACTS_AfterLoadChange_sorted_trim = [x for x in lp_max_RLFACTS_AfterLoadChange_sorted if x <= lp_limit_for_noseCurve]
+
         v_noFACTS_sorted_trim = v_noFACTS_sorted[0:len(lp_max_noFACTS_sorted_trim)]
         v_FACTS_sorted_trim = v_FACTS_sorted[0:len(lp_max_FACTS_sorted_trim)]
         v_RLFACTS_sorted_trim = v_RLFACTS_sorted[0:len(lp_max_RLFACTS_sorted_trim)]
@@ -596,6 +611,8 @@ class qLearning:
         v_FACTS_eachTS_sorted_trim = v_FACTS_eachTS_sorted[0:len(lp_max_FACTS_eachTS_sorted_trim)]
         if benchmarkFlag:
             v_RLFACTS_Benchmark_sorted_trim = v_RLFACTS_Benchmark_sorted[0:len(lp_max_RLFACTS_Benchmark_sorted_trim)]
+        v_RLFACTS_AfterLoadChange_sorted_trim = v_RLFACTS_AfterLoadChange_sorted[0:len(lp_max_RLFACTS_AfterLoadChange_sorted_trim)]
+
         loading_arr_plot_noFACTS = loading_arr_sorted[0:len(lp_max_noFACTS_sorted_trim)]
         loading_arr_plot_FACTS = loading_arr_sorted[0:len(lp_max_FACTS_sorted_trim)]
         loading_arr_plot_RLFACTS = loading_arr_sorted[0:len(lp_max_RLFACTS_sorted_trim)]
@@ -603,6 +620,7 @@ class qLearning:
         loading_arr_plot_FACTS_eachTS = loading_arr_sorted[0:len(lp_max_FACTS_eachTS_sorted_trim)]
         if benchmarkFlag:
             loading_arr_plot_RLFACTS_Benchmark = loading_arr_sorted[0:len(lp_max_RLFACTS_Benchmark_sorted_trim)]
+        loading_arr_plot_RLFACTS_AfterLoadChange = loading_arr_sorted[1:len(lp_max_RLFACTS_AfterLoadChange_sorted_trim)+1]
 
         #Print result wrt trimmed voltage
         print('')
@@ -618,22 +636,28 @@ class qLearning:
         print('std voltage facts:', np.std(v_FACTS_sorted_trim))
         print('std voltage facts with RL:', np.std(v_RLFACTS_sorted_trim))
         print('std voltage facts no series:', np.std(v_FACTS_noSeries_sorted_trim))
+        print('')
+        print('max voltage RL after load change', np.max(v_RLFACTS_AfterLoadChange))
+        print('min voltage RL after load change', np.min(v_RLFACTS_AfterLoadChange))
+        print('mean voltage RL after load change', np.mean(v_RLFACTS_AfterLoadChange))
+        print('std voltage RL after load change', np.std(v_RLFACTS_AfterLoadChange))
+
 
         # Plot Nose Curve
         fig3 = plt.figure()
         color = 'tab:blue'
-        plt.plot(loading_arr_plot_noFACTS, v_noFACTS_sorted_trim, Figure=fig3, color=color)
-        plt.plot(loading_arr_plot_FACTS, v_FACTS_sorted_trim, Figure=fig3, color='g')
-        plt.plot(loading_arr_plot_FACTS_noSeries, v_FACTS_noSeries_sorted_trim, Figure=fig3, color='k')
-        plt.plot(loading_arr_plot_RLFACTS, v_RLFACTS_sorted_trim, Figure=fig3, color='r')
-        # plt.plot(loading_arr_plot_FACTS_eachTS, v_FACTS_eachTS_sorted_trim, Figure=fig3, color='c')
+        plt.scatter(loading_arr_plot_noFACTS, v_noFACTS_sorted_trim, Figure=fig3, color=color)
+        plt.scatter(loading_arr_plot_FACTS, v_FACTS_sorted_trim, Figure=fig3, color='g')
+        plt.scatter(loading_arr_plot_FACTS_noSeries, v_FACTS_noSeries_sorted_trim, Figure=fig3, color='k')
+        plt.scatter(loading_arr_plot_RLFACTS, v_RLFACTS_sorted_trim, Figure=fig3, color='r')
+        plt.scatter(loading_arr_plot_RLFACTS_AfterLoadChange, v_RLFACTS_AfterLoadChange_sorted_trim, Figure=fig3, color='c')
         if benchmarkFlag:
-            plt.plot(loading_arr_plot_RLFACTS_Benchmark, v_RLFACTS_Benchmark_sorted_trim, Figure=fig3, color='y')
+            plt.scatter(loading_arr_plot_RLFACTS_Benchmark, v_RLFACTS_Benchmark_sorted_trim, Figure=fig3, color='y')
         plt.title('Nose curve from episode with sorted voltage levels')
         plt.xlabel('Loading [p.u.]', Figure=fig3)
         plt.ylabel('Bus Voltage [p.u.]', Figure=fig3, color=color)
         # plt.legend(['v no FACTS', 'v FACTS', 'v FACTS no series comp','v RL FACTS', 'v FACTS each ts', 'v RL FACTS benchmark.'], loc=1)
-        plt.legend(['v no FACTS', 'v FACTS', 'v FACTS no series comp', 'v RL FACTS', 'v RL FACTS benchmark.'], loc=1)
+        plt.legend(['no FACTS', 'FACTS', 'FACTS no series comp', '$Q$-learning FACTS $v^1$', '$Q$-learning FACTS $v^2$', 'RL FACTS benchmark.'], loc=1)
         plt.grid()
         plt.show()
 
