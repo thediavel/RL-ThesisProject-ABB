@@ -566,172 +566,184 @@ class DQN:
             rewardFactsBenchmark = pickle.load(pickle_file)
             rewardFactsBenchmark = rewardFactsBenchmark[0:steps]
 
+            # Make plots
+            i_list = list(range(860, 860 + steps))
+            fig, ax1 = plt.subplots()
+            color = 'tab:blue'
+            ax1.set_title('Voltage and line loading standard deviation for test set', fontsize=23)
+            ax1.set_xlabel('Time step [-]', fontsize=19)
+            ax1.set_ylabel('Bus Voltage [pu]', color=color, fontsize=19)
+            ax1.plot(i_list, v_noFACTS, color=color)
+            ax1.plot(i_list, v_FACTS, color='g')
+            ax1.plot(i_list, v_FACTS_noSeries, color='k')
+            ax1.plot(i_list, v_RLFACTS, color='r')
+            # ax1.plot(i_list, v_FACTS_eachTS, color= 'c')
+            if benchmarkFlag:
+                ax1.plot(i_list, v_RLFACTS_Benchmark, color='y')
 
-        # Make plots
-        i_list = list(range(1, steps+1))
-        fig, ax1 = plt.subplots()
-        color = 'tab:blue'
-        ax1.set_title('Voltage and line loading standard deviation for an episode')
-        ax1.set_xlabel('Time series')
-        ax1.set_ylabel('Bus Voltage', color=color)
-        ax1.plot(i_list, v_noFACTS, color=color)
-        ax1.plot(i_list, v_FACTS, color='g')
-        ax1.plot(i_list, v_FACTS_noSeries, color='k')
-        ax1.plot(i_list, v_RLFACTS, color='r')
-        #ax1.plot(i_list, v_FACTS_eachTS, color= 'c')
-        if benchmarkFlag:
-         ax1.plot(i_list, v_RLFACTS_Benchmark, color='y')
+            # ax1.legend(['v no facts', 'v facts' , 'v facts no series comp','v RL facts', 'v RL facts upd each ts', 'v RL benchmark'], loc=2)
+            ax1.legend(['v no FACTS', 'v shunt+series', 'v hunt only', 'v DQN', 'v RL benchmark'], loc=2, fontsize=14)
+            ax2 = ax1.twinx()
 
-        #ax1.legend(['v no facts', 'v facts' , 'v facts no series comp','v RL facts', 'v RL facts upd each ts', 'v RL benchmark'], loc=2)
-        ax1.legend(['v no facts', 'v facts shunt+series', 'v facts shunt only', 'v DQN facts', 'v DQN benchmark'], loc=2)
-        ax2 = ax1.twinx()
+            color = 'tab:blue'
+            ax2.set_ylabel('line loading percentage std [% units]', color='m', fontsize=19)
+            ax2.plot(i_list, lp_std_noFACTS, color=color, linestyle='dashed')
+            ax2.plot(i_list, lp_std_FACTS, color='g', linestyle='dashed')
+            ax2.plot(i_list, lp_std_FACTS_noSeries, color='k', linestyle='dashed')
+            ax2.plot(i_list, lp_std_RLFACTS, color='r', linestyle='dashed')
+            # ax2.plot(i_list, lp_std_FACTS_eachTS, color='c', linestyle = 'dashed')
+            if benchmarkFlag:
+                ax2.plot(i_list, lp_std_RLFACTS_Benchmark, color='y', linestyle='dashed')
+            # ax2.legend(['std lp no facts', 'std lp facts', 'std lp facts no series comp', 'std lp RL facts', 'std lp facts each ts', 'std lp RL benchmark' ], loc=1)
+            ax2.legend(['std lp no FACTS', 'std lp shunt+series', 'std lp shunt only', 'std lp DQN',
+                        'std lp RL benchmark'], loc=1, fontsize=14)
+            plt.grid()
+            plt.show()
 
-        color = 'tab:blue'
-        ax2.set_ylabel('line loading percentage std [% units]', color='m')
-        ax2.plot(i_list, lp_std_noFACTS, color=color, linestyle = 'dashed')
-        ax2.plot(i_list, lp_std_FACTS, color='g',linestyle = 'dashed')
-        ax2.plot(i_list, lp_std_FACTS_noSeries, color='k', linestyle = 'dashed')
-        ax2.plot(i_list, lp_std_RLFACTS, color='r', linestyle = 'dashed')
-        #ax2.plot(i_list, lp_std_FACTS_eachTS, color='c', linestyle = 'dashed')
-        if benchmarkFlag:
-            ax2.plot(i_list, lp_std_RLFACTS_Benchmark, color='y', linestyle='dashed')
-        #ax2.legend(['std lp no facts', 'std lp facts', 'std lp facts no series comp', 'std lp RL facts', 'std lp facts each ts', 'std lp RL benchmark' ], loc=1)
-        ax2.legend(['std lp no facts', 'std lp facts shunt+series', 'std lp facts shunt only', 'std lp DQN facts', 'std lp DQN benchmark'], loc=1)
-        plt.grid()
-        plt.show()
+            # Plot Rewards
+            fig2 = plt.figure()
+            color = 'tab:blue'
+            plt.plot(i_list, rewardNoFacts, Figure=fig2, color=color)
+            plt.plot(i_list, rewardFacts, Figure=fig2, color='g')
+            plt.plot(i_list, rewardFactsNoSeries, Figure=fig2, color='k')
+            plt.plot(i_list, rewardFactsRL, Figure=fig2, color='r')
+            # plt.plot(i_list, rewardFactsEachTS, Figure=fig2, color='c')
+            if benchmarkFlag:
+                plt.plot(i_list, rewardFactsBenchmark, Figure=fig2, color='y')
+            plt.title('Rewards along the test set', fontsize=23)
+            plt.xlabel('Time step [-]', Figure=fig2, fontsize=19)
+            plt.ylabel('Reward [-]', Figure=fig2, fontsize=19)
+            plt.xticks(fontsize=14)
+            plt.yticks(fontsize=14)
+            # plt.legend(['no FACTS', 'FACTS', 'FACTS no series comp', 'RL FACTS', 'FACTS each ts', 'RL FACTS benchmark.'],
+            #           loc=1)
+            plt.legend(['no FACTS', 'shunt+series', 'shunt only', 'DQN', 'RL benchmark.'],
+                       loc=1, fontsize=14)
+            plt.grid()
+            plt.show()
 
-        # Plot Rewards
-        fig2 = plt.figure()
-        color = 'tab:blue'
-        plt.plot(i_list, rewardNoFacts, Figure=fig2, color=color)
-        plt.plot(i_list, rewardFacts, Figure=fig2, color='g')
-        plt.plot(i_list, rewardFactsNoSeries, Figure=fig2, color='k')
-        plt.plot(i_list, rewardFactsRL, Figure=fig2, color='r')
-        #plt.plot(i_list, rewardFactsEachTS, Figure=fig2, color='c')
-        if benchmarkFlag:
-            plt.plot(i_list, rewardFactsBenchmark, Figure=fig2, color='y')
-        plt.title('Rewards as per Environment Setup')
-        plt.xlabel('TimeStep', Figure=fig2)
-        plt.ylabel('Reward', Figure=fig2, color=color)
-        #plt.legend(['no FACTS', 'FACTS', 'FACTS no series comp', 'RL FACTS', 'FACTS each ts', 'RL FACTS benchmark.'],
-        #           loc=1)
-        plt.legend(['no FACTS', 'FACTS', 'FACTS no series comp', 'DQN FACTS', 'DQN FACTS benchmark.'],
-                   loc=1)
-        plt.grid()
-        plt.show()
+            ## Calculate measure for comparing RL and Benchmark wrt reward.
+            performanceFactsRL = 0
+            performanceFacts = 0
+            performanceFactsnoSeries = 0
+            PerformanceNoFacts = 0
+            for i in range(0, steps):
+                performanceFactsRL += math.sqrt((rewardFactsRL[i] - rewardFactsBenchmark[i]) ** 2)
+                performanceFacts += math.sqrt((rewardFacts[i] - rewardFactsBenchmark[i]) ** 2)
+                performanceFactsnoSeries += math.sqrt((rewardFactsNoSeries[i] - rewardFactsBenchmark[i]) ** 2)
+                PerformanceNoFacts += math.sqrt((rewardNoFacts[i] - rewardFactsBenchmark[i]) ** 2)
 
-        ## Calculate measure for comparing RL and Benchmark wrt reward.
-        performanceFactsRL = 0
-        performanceFacts = 0
-        performanceFactsnoSeries = 0
-        PerformanceNoFacts = 0
-        for i in range(0,steps):
-            performanceFactsRL += math.sqrt((rewardFactsRL[i]-rewardFactsBenchmark[i])**2)
-            performanceFacts += math.sqrt((rewardFacts[i] - rewardFactsBenchmark[i]) ** 2)
-            performanceFactsnoSeries += math.sqrt((rewardFactsNoSeries[i] - rewardFactsBenchmark[i]) ** 2)
-            PerformanceNoFacts += math.sqrt((rewardNoFacts[i] - rewardFactsBenchmark[i]) ** 2)
+            print('')
+            print('performance FACTS RL: ', performanceFactsRL)
+            print('performance FACTS shunt+series: ', performanceFacts)
+            print('performance FACTS shunt only: ', performanceFactsnoSeries)
+            print('performance no FACTS: ', PerformanceNoFacts)
 
-        print('')
-        print('performance FACTS RL: ', performanceFactsRL)
-        print('performance FACTS shunt+series: ', performanceFacts)
-        print('performance FACTS shunt only: ', performanceFactsnoSeries)
-        print('performance no FACTS: ', PerformanceNoFacts)
+            # Nosecurve:
+            loading_arr_sorted = sorted(loading_arr)
 
-        # Nosecurve:
-        loading_arr_sorted = sorted(loading_arr)
+            # Sort the measurements
+            v_noFACTS_sorted = [x for _, x in sorted(zip(loading_arr, v_noFACTS))]
+            lp_max_noFACTS_sorted = [x for _, x in sorted(zip(loading_arr, lp_max_noFACTS))]
+            v_FACTS_sorted = [x for _, x in sorted(zip(loading_arr, v_FACTS))]
+            lp_max_FACTS_sorted = [x for _, x in sorted(zip(loading_arr, lp_max_FACTS))]
+            v_RLFACTS_sorted = [x for _, x in sorted(zip(loading_arr, v_RLFACTS))]
+            lp_max_RLFACTS_sorted = [x for _, x in sorted(zip(loading_arr, lp_max_RLFACTS))]
+            v_FACTS_noSeries_sorted = [x for _, x in sorted(zip(loading_arr, v_FACTS_noSeries))]
+            lp_max_FACTS_noSeries_sorted = [x for _, x in sorted(zip(loading_arr, lp_max_FACTS_noSeries))]
+            v_FACTS_eachTS_sorted = [x for _, x in sorted(zip(loading_arr, v_FACTS_eachTS))]
+            lp_max_FACTS_eachTS_sorted = [x for _, x in sorted(zip(loading_arr, lp_max_FACTS_eachTS))]
+            if benchmarkFlag:
+                v_RLFACTS_Benchmark_sorted = [x for _, x in sorted(zip(loading_arr, v_RLFACTS_Benchmark))]
+                lp_max_RLFACTS_Benchmark_sorted = [x for _, x in sorted(zip(loading_arr, lp_max_RLFACTS_Benchmark))]
+            v_RLFACTS_AfterLoadChange_sorted = [x for _, x in sorted(zip(loading_arr, v_RLFACTS_AfterLoadChange))]
+            lp_max_RLFACTS_AfterLoadChange_sorted = [x for _, x in
+                                                     sorted(zip(loading_arr, lp_max_RLFACTS_AfterLoadChange))]
+            print('')
+            print('maximum loading percentage noFACTS  ', max(lp_max_noFACTS))
+            print('maximum loading percentage Shunt+Series  ', max(lp_max_FACTS))
+            print('maximum loading percentage shunt only  ', max(lp_max_FACTS_noSeries))
+            print('maximum loading percentage after action RL: ', max(lp_max_RLFACTS_Benchmark))
+            print('maximum loading percentage after load change RL: ', max(lp_max_RLFACTS_AfterLoadChange))
 
-        # Sort the measurements
-        v_noFACTS_sorted = [x for _, x in sorted(zip(loading_arr, v_noFACTS))]
-        lp_max_noFACTS_sorted = [x for _, x in sorted(zip(loading_arr, lp_max_noFACTS))]
-        v_FACTS_sorted = [x for _, x in sorted(zip(loading_arr, v_FACTS))]
-        lp_max_FACTS_sorted = [x for _, x in sorted(zip(loading_arr, lp_max_FACTS))]
-        v_RLFACTS_sorted = [x for _, x in sorted(zip(loading_arr, v_RLFACTS))]
-        lp_max_RLFACTS_sorted = [x for _, x in sorted(zip(loading_arr, lp_max_RLFACTS))]
-        v_FACTS_noSeries_sorted = [x for _, x in sorted(zip(loading_arr, v_FACTS_noSeries))]
-        lp_max_FACTS_noSeries_sorted = [x for _, x in sorted(zip(loading_arr, lp_max_FACTS_noSeries))]
-        v_FACTS_eachTS_sorted = [x for _, x in sorted(zip(loading_arr, v_FACTS_eachTS))]
-        lp_max_FACTS_eachTS_sorted = [x for _, x in sorted(zip(loading_arr, lp_max_FACTS_eachTS))]
-        if benchmarkFlag:
-            v_RLFACTS_Benchmark_sorted = [x for _, x in sorted(zip(loading_arr, v_RLFACTS_Benchmark))]
-            lp_max_RLFACTS_Benchmark_sorted = [x for _, x in sorted(zip(loading_arr, lp_max_RLFACTS_Benchmark))]
-        v_RLFACTS_AfterLoadChange_sorted = [x for _, x in sorted(zip(loading_arr, v_RLFACTS_AfterLoadChange))]
-        lp_max_RLFACTS_AfterLoadChange_sorted = [x for _, x in sorted(zip(loading_arr, lp_max_RLFACTS_AfterLoadChange))]
-        print('')
-        print('maximum loading percentage noFACTS  ', max(lp_max_noFACTS))
-        print('maximum loading percentage Shunt+Series  ', max(lp_max_FACTS))
-        print('maximum loading percentage shunt only  ', max(lp_max_FACTS_noSeries))
-        print('maximum loading percentage after action RL: ', max(lp_max_RLFACTS_Benchmark))
-        print('maximum loading percentage after load change RL: ', max(lp_max_RLFACTS_AfterLoadChange))
+            # Trim arrays to only include values <= X % loading percentage
+            lp_limit_for_noseCurve = 100
+            lp_max_noFACTS_sorted_trim = [x for x in lp_max_noFACTS_sorted if x <= lp_limit_for_noseCurve]
+            lp_max_FACTS_sorted_trim = [x for x in lp_max_FACTS_sorted if x <= lp_limit_for_noseCurve]
+            lp_max_RLFACTS_sorted_trim = [x for x in lp_max_RLFACTS_sorted if x <= lp_limit_for_noseCurve]
+            lp_max_FACTS_noSeries_sorted_trim = [x for x in lp_max_FACTS_noSeries_sorted if x <= lp_limit_for_noseCurve]
+            lp_max_FACTS_eachTS_sorted_trim = [x for x in lp_max_FACTS_eachTS_sorted if x <= lp_limit_for_noseCurve]
+            if benchmarkFlag:
+                lp_max_RLFACTS_Benchmark_sorted_trim = [x for x in lp_max_RLFACTS_Benchmark_sorted if
+                                                        x <= lp_limit_for_noseCurve]
+            lp_max_RLFACTS_AfterLoadChange_sorted_trim = [x for x in lp_max_RLFACTS_AfterLoadChange_sorted if
+                                                          x <= lp_limit_for_noseCurve]
 
-        #Trim arrays to only include values <= X % loading percentage
-        lp_limit_for_noseCurve = 100
-        lp_max_noFACTS_sorted_trim = [x for x in lp_max_noFACTS_sorted if x <= lp_limit_for_noseCurve]
-        lp_max_FACTS_sorted_trim = [x for x in lp_max_FACTS_sorted if x <= lp_limit_for_noseCurve]
-        lp_max_RLFACTS_sorted_trim = [x for x in lp_max_RLFACTS_sorted if x <= lp_limit_for_noseCurve]
-        lp_max_FACTS_noSeries_sorted_trim = [x for x in lp_max_FACTS_noSeries_sorted if x <= lp_limit_for_noseCurve]
-        lp_max_FACTS_eachTS_sorted_trim = [x for x in lp_max_FACTS_eachTS_sorted if x <= lp_limit_for_noseCurve]
-        if benchmarkFlag:
-            lp_max_RLFACTS_Benchmark_sorted_trim = [x for x in lp_max_RLFACTS_Benchmark_sorted if x <= lp_limit_for_noseCurve]
-        lp_max_RLFACTS_AfterLoadChange_sorted_trim = [x for x in lp_max_RLFACTS_AfterLoadChange_sorted if x <= lp_limit_for_noseCurve]
+            v_noFACTS_sorted_trim = v_noFACTS_sorted[0:len(lp_max_noFACTS_sorted_trim)]
+            v_FACTS_sorted_trim = v_FACTS_sorted[0:len(lp_max_FACTS_sorted_trim)]
+            v_RLFACTS_sorted_trim = v_RLFACTS_sorted[0:len(lp_max_RLFACTS_sorted_trim)]
+            v_FACTS_noSeries_sorted_trim = v_FACTS_noSeries_sorted[0:len(lp_max_FACTS_noSeries_sorted_trim)]
+            v_FACTS_eachTS_sorted_trim = v_FACTS_eachTS_sorted[0:len(lp_max_FACTS_eachTS_sorted_trim)]
+            if benchmarkFlag:
+                v_RLFACTS_Benchmark_sorted_trim = v_RLFACTS_Benchmark_sorted[
+                                                  0:len(lp_max_RLFACTS_Benchmark_sorted_trim)]
+            v_RLFACTS_AfterLoadChange_sorted_trim = v_RLFACTS_AfterLoadChange_sorted[
+                                                    0:len(lp_max_RLFACTS_AfterLoadChange_sorted_trim)]
 
-        v_noFACTS_sorted_trim = v_noFACTS_sorted[0:len(lp_max_noFACTS_sorted_trim)]
-        v_FACTS_sorted_trim = v_FACTS_sorted[0:len(lp_max_FACTS_sorted_trim)]
-        v_RLFACTS_sorted_trim = v_RLFACTS_sorted[0:len(lp_max_RLFACTS_sorted_trim)]
-        v_FACTS_noSeries_sorted_trim = v_FACTS_noSeries_sorted[0:len(lp_max_FACTS_noSeries_sorted_trim)]
-        v_FACTS_eachTS_sorted_trim = v_FACTS_eachTS_sorted[0:len(lp_max_FACTS_eachTS_sorted_trim)]
-        if benchmarkFlag:
-            v_RLFACTS_Benchmark_sorted_trim = v_RLFACTS_Benchmark_sorted[0:len(lp_max_RLFACTS_Benchmark_sorted_trim)]
-        v_RLFACTS_AfterLoadChange_sorted_trim = v_RLFACTS_AfterLoadChange_sorted[0:len(lp_max_RLFACTS_AfterLoadChange_sorted_trim)]
+            loading_arr_plot_noFACTS = loading_arr_sorted[0:len(lp_max_noFACTS_sorted_trim)]
+            loading_arr_plot_FACTS = loading_arr_sorted[0:len(lp_max_FACTS_sorted_trim)]
+            loading_arr_plot_RLFACTS = loading_arr_sorted[0:len(lp_max_RLFACTS_sorted_trim)]
+            loading_arr_plot_FACTS_noSeries = loading_arr_sorted[0:len(lp_max_FACTS_noSeries_sorted_trim)]
+            loading_arr_plot_FACTS_eachTS = loading_arr_sorted[0:len(lp_max_FACTS_eachTS_sorted_trim)]
+            if benchmarkFlag:
+                loading_arr_plot_RLFACTS_Benchmark = loading_arr_sorted[0:len(lp_max_RLFACTS_Benchmark_sorted_trim)]
+            loading_arr_plot_RLFACTS_AfterLoadChange = loading_arr_sorted[
+                                                       1:len(lp_max_RLFACTS_AfterLoadChange_sorted_trim) + 1]
 
-        loading_arr_plot_noFACTS = loading_arr_sorted[0:len(lp_max_noFACTS_sorted_trim)]
-        loading_arr_plot_FACTS = loading_arr_sorted[0:len(lp_max_FACTS_sorted_trim)]
-        loading_arr_plot_RLFACTS = loading_arr_sorted[0:len(lp_max_RLFACTS_sorted_trim)]
-        loading_arr_plot_FACTS_noSeries = loading_arr_sorted[0:len(lp_max_FACTS_noSeries_sorted_trim)]
-        loading_arr_plot_FACTS_eachTS = loading_arr_sorted[0:len(lp_max_FACTS_eachTS_sorted_trim)]
-        if benchmarkFlag:
-            loading_arr_plot_RLFACTS_Benchmark = loading_arr_sorted[0:len(lp_max_RLFACTS_Benchmark_sorted_trim)]
-        loading_arr_plot_RLFACTS_AfterLoadChange = loading_arr_sorted[1:len(lp_max_RLFACTS_AfterLoadChange_sorted_trim)+1]
+            # Print result wrt trimmed voltage
+            print('')
+            print('max voltage facts:', np.max(v_FACTS_sorted_trim))
+            print('max voltage facts with RL:', np.max(v_RLFACTS_sorted_trim))
+            print('max voltage facts no series:', np.max(v_FACTS_noSeries_sorted_trim))
+            print('min voltage facts:', np.min(v_FACTS_sorted_trim))
+            print('min voltage facts with RL:', np.min(v_RLFACTS_sorted_trim))
+            print('min voltage facts no series:', np.min(v_FACTS_noSeries_sorted_trim))
+            print('mean voltage facts:', np.mean(v_FACTS_sorted_trim))
+            print('mean voltage facts with RL:', np.mean(v_RLFACTS_sorted_trim))
+            print('mean voltage facts no series:', np.mean(v_FACTS_noSeries_sorted_trim))
+            print('std voltage facts:', np.std(v_FACTS_sorted_trim))
+            print('std voltage facts with RL:', np.std(v_RLFACTS_sorted_trim))
+            print('std voltage facts no series:', np.std(v_FACTS_noSeries_sorted_trim))
+            print('')
+            print('max voltage RL after load change', np.max(v_RLFACTS_AfterLoadChange))
+            print('min voltage RL after load change', np.min(v_RLFACTS_AfterLoadChange))
+            print('mean voltage RL after load change', np.mean(v_RLFACTS_AfterLoadChange))
+            print('std voltage RL after load change', np.std(v_RLFACTS_AfterLoadChange))
 
-        #Print result wrt trimmed voltage
-        print('')
-        print('max voltage facts:', np.max(v_FACTS_sorted_trim))
-        print('max voltage facts with RL:', np.max(v_RLFACTS_sorted_trim))
-        print('max voltage facts no series:', np.max(v_FACTS_noSeries_sorted_trim))
-        print('min voltage facts:', np.min(v_FACTS_sorted_trim))
-        print('min voltage facts with RL:', np.min(v_RLFACTS_sorted_trim))
-        print('min voltage facts no series:', np.min(v_FACTS_noSeries_sorted_trim))
-        print('mean voltage facts:', np.mean(v_FACTS_sorted_trim))
-        print('mean voltage facts with RL:', np.mean(v_RLFACTS_sorted_trim))
-        print('mean voltage facts no series:', np.mean(v_FACTS_noSeries_sorted_trim))
-        print('std voltage facts:', np.std(v_FACTS_sorted_trim))
-        print('std voltage facts with RL:', np.std(v_RLFACTS_sorted_trim))
-        print('std voltage facts no series:', np.std(v_FACTS_noSeries_sorted_trim))
-        print('')
-        print('max voltage RL after load change', np.max(v_RLFACTS_AfterLoadChange))
-        print('min voltage RL after load change', np.min(v_RLFACTS_AfterLoadChange))
-        print('mean voltage RL after load change', np.mean(v_RLFACTS_AfterLoadChange))
-        print('std voltage RL after load change', np.std(v_RLFACTS_AfterLoadChange))
-
-        print(len(loading_arr_plot_RLFACTS_AfterLoadChange))
-        print(len(v_RLFACTS_AfterLoadChange_sorted_trim))
-
-        # Plot Nose Curve
-        fig3 = plt.figure()
-        color = 'tab:blue'
-        plt.scatter(loading_arr_plot_noFACTS, v_noFACTS_sorted_trim, Figure=fig3, color=color)
-        plt.scatter(loading_arr_plot_FACTS, v_FACTS_sorted_trim, Figure=fig3, color='g')
-        plt.scatter(loading_arr_plot_FACTS_noSeries, v_FACTS_noSeries_sorted_trim, Figure=fig3, color='k')
-        plt.scatter(loading_arr_plot_RLFACTS, v_RLFACTS_sorted_trim, Figure=fig3, color='r')
-        plt.scatter(loading_arr_plot_RLFACTS_AfterLoadChange, v_RLFACTS_AfterLoadChange_sorted_trim, Figure=fig3, color='c')
-        if benchmarkFlag:
-            plt.scatter(loading_arr_plot_RLFACTS_Benchmark, v_RLFACTS_Benchmark_sorted_trim, Figure=fig3, color='y')
-        plt.title('Nose curve from episode with sorted voltage levels')
-        plt.xlabel('Loading [p.u.]', Figure=fig3)
-        plt.ylabel('Bus Voltage [p.u.]', Figure=fig3, color=color)
-        # plt.legend(['v no FACTS', 'v FACTS', 'v FACTS no series comp','v RL FACTS', 'v FACTS each ts', 'v RL FACTS benchmark.'], loc=1)
-        plt.legend(['no FACTS', 'FACTS', 'FACTS no series comp', 'DQN FACTS $v^1$', 'DQN FACTS $v^2$', 'RL FACTS benchmark.'], loc=1)
-        plt.grid()
-        plt.show()
+            # Plot Nose Curve
+            fig3 = plt.figure()
+            color = 'tab:blue'
+            markersize = 13
+            plt.scatter(loading_arr_plot_noFACTS, v_noFACTS_sorted_trim, Figure=fig3, color=color, s=markersize)
+            plt.scatter(loading_arr_plot_FACTS, v_FACTS_sorted_trim, Figure=fig3, color='g', s=markersize)
+            plt.scatter(loading_arr_plot_FACTS_noSeries, v_FACTS_noSeries_sorted_trim, Figure=fig3, color='k',
+                        s=markersize)
+            plt.scatter(loading_arr_plot_RLFACTS, v_RLFACTS_sorted_trim, Figure=fig3, color='r', s=markersize)
+            plt.scatter(loading_arr_plot_RLFACTS_AfterLoadChange, v_RLFACTS_AfterLoadChange_sorted_trim, Figure=fig3,
+                        color='c', s=markersize)
+            if benchmarkFlag:
+                plt.scatter(loading_arr_plot_RLFACTS_Benchmark, v_RLFACTS_Benchmark_sorted_trim, Figure=fig3, color='y',
+                            s=markersize)
+            plt.title('Nose-curve from test set with sorted voltage levels', fontsize=23)
+            plt.xlabel('Loading [pu]', Figure=fig3, fontsize=19)
+            plt.ylabel('Bus Voltage [pu]', Figure=fig3, color=color, fontsize=19)
+            plt.xticks(fontsize=14)
+            plt.yticks(fontsize=14)
+            # plt.legend(['v no FACTS', 'v FACTS', 'v FACTS no series comp','v RL FACTS', 'v FACTS each ts', 'v RL FACTS benchmark.'], loc=1)
+            plt.legend(['no FACTS', 'shunt+series', 'shunt only', 'DQN $v_1$', 'DQN $v_2$',
+                        'RL benchmark.'], loc=1, fontsize=14)
+            plt.grid()
+            plt.show()
 
 
 
