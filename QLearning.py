@@ -291,7 +291,7 @@ class qLearning:
         self.env_2bus.seriesControl.ref = lp_ref;
         self.env_2bus.runEnv(runControl=True)
         busVoltage = self.env_2bus.net.res_bus.vm_pu[bus_index_voltage]
-        lp_max = min(self.env_2bus.net.res_line.loading_percent)
+        lp_max = max(self.env_2bus.net.res_line.loading_percent)
         lp_std = np.std(self.env_2bus.net.res_line.loading_percent)
         return busVoltage, lp_max, lp_std
 
@@ -382,7 +382,7 @@ class qLearning:
             # no FACTS
             qObj_env_noFACTS.env_2bus.runEnv(runControl=False)  # No FACTS, no control
             v_noFACTS.append(qObj_env_noFACTS.env_2bus.net.res_bus.vm_pu[bus_index_voltage])
-            lp_max_noFACTS.append(min(qObj_env_noFACTS.env_2bus.net.res_line.loading_percent))
+            lp_max_noFACTS.append(max(qObj_env_noFACTS.env_2bus.net.res_line.loading_percent))
             lp_std_noFACTS.append(np.std(qObj_env_noFACTS.env_2bus.net.res_line.loading_percent))
             rewardNoFacts.append((200 + (math.exp(
                 abs(1 - qObj_env_noFACTS.env_2bus.net.res_bus.vm_pu[bus_index_voltage]) * 10) * -20) - np.std(
@@ -495,12 +495,12 @@ class qLearning:
             rewardFactsBenchmark = rewardFactsBenchmark[0:steps]
 
         # Make plots
-        i_list = list(range(1, steps + 1))
+        i_list = list(range(860, 860+steps))
         fig, ax1 = plt.subplots()
         color = 'tab:blue'
-        ax1.set_title('Voltage and line loading standard deviation for an episode')
-        ax1.set_xlabel('Time series')
-        ax1.set_ylabel('Bus Voltage', color=color)
+        ax1.set_title('Voltage and line loading standard deviation for test set', fontsize=23)
+        ax1.set_xlabel('Time step [-]', fontsize=19)
+        ax1.set_ylabel('Bus Voltage [pu]', color=color, fontsize=19)
         ax1.plot(i_list, v_noFACTS, color=color)
         ax1.plot(i_list, v_FACTS, color='g')
         ax1.plot(i_list, v_FACTS_noSeries, color='k')
@@ -510,11 +510,11 @@ class qLearning:
             ax1.plot(i_list, v_RLFACTS_Benchmark, color='y')
 
         # ax1.legend(['v no facts', 'v facts' , 'v facts no series comp','v RL facts', 'v RL facts upd each ts', 'v RL benchmark'], loc=2)
-        ax1.legend(['v no facts', 'v facts shunt+series', 'v facts shunt only', 'v RL facts', 'v RL benchmark'], loc=2)
+        ax1.legend(['v no FACTS', 'v shunt+series', 'v hunt only', 'v $Q$-learning', 'v RL benchmark'], loc=2, fontsize=14)
         ax2 = ax1.twinx()
 
         color = 'tab:blue'
-        ax2.set_ylabel('line loading percentage std [% units]', color='m')
+        ax2.set_ylabel('line loading percentage std [% units]', color='m', fontsize=19)
         ax2.plot(i_list, lp_std_noFACTS, color=color, linestyle='dashed')
         ax2.plot(i_list, lp_std_FACTS, color='g', linestyle='dashed')
         ax2.plot(i_list, lp_std_FACTS_noSeries, color='k', linestyle='dashed')
@@ -523,8 +523,8 @@ class qLearning:
         if benchmarkFlag:
             ax2.plot(i_list, lp_std_RLFACTS_Benchmark, color='y', linestyle='dashed')
         # ax2.legend(['std lp no facts', 'std lp facts', 'std lp facts no series comp', 'std lp RL facts', 'std lp facts each ts', 'std lp RL benchmark' ], loc=1)
-        ax2.legend(['std lp no facts', 'std lp facts shunt+series', 'std lp facts shunt only', 'std lp $Q$-learning facts',
-                    'std lp $Q$-learning benchmark'], loc=1)
+        ax2.legend(['std lp no FACTS', 'std lp shunt+series', 'std lp shunt only', 'std lp $Q$-learning',
+                    'std lp RL benchmark'], loc=1, fontsize=14)
         plt.grid()
         plt.show()
 
@@ -538,13 +538,15 @@ class qLearning:
         # plt.plot(i_list, rewardFactsEachTS, Figure=fig2, color='c')
         if benchmarkFlag:
             plt.plot(i_list, rewardFactsBenchmark, Figure=fig2, color='y')
-        plt.title('Rewards as per Environment Setup')
-        plt.xlabel('TimeStep', Figure=fig2)
-        plt.ylabel('Reward', Figure=fig2, color=color)
+        plt.title('Rewards along the test set', fontsize=23)
+        plt.xlabel('Time step [-]', Figure=fig2, fontsize=19)
+        plt.ylabel('Reward [-]', Figure=fig2, fontsize=19)
+        plt.xticks(fontsize=14)
+        plt.yticks(fontsize=14)
         # plt.legend(['no FACTS', 'FACTS', 'FACTS no series comp', 'RL FACTS', 'FACTS each ts', 'RL FACTS benchmark.'],
         #           loc=1)
-        plt.legend(['no FACTS', 'FACTS', 'FACTS no series comp', '$Q$-learning FACTS', '$Q$-learning FACTS benchmark.'],
-                   loc=1)
+        plt.legend(['no FACTS', 'shunt+series', 'shunt only', '$Q$-learning', 'RL benchmark.'],
+                   loc=1, fontsize=14)
         plt.grid()
         plt.show()
 
@@ -646,18 +648,21 @@ class qLearning:
         # Plot Nose Curve
         fig3 = plt.figure()
         color = 'tab:blue'
-        plt.scatter(loading_arr_plot_noFACTS, v_noFACTS_sorted_trim, Figure=fig3, color=color)
-        plt.scatter(loading_arr_plot_FACTS, v_FACTS_sorted_trim, Figure=fig3, color='g')
-        plt.scatter(loading_arr_plot_FACTS_noSeries, v_FACTS_noSeries_sorted_trim, Figure=fig3, color='k')
-        plt.scatter(loading_arr_plot_RLFACTS, v_RLFACTS_sorted_trim, Figure=fig3, color='r')
-        plt.scatter(loading_arr_plot_RLFACTS_AfterLoadChange, v_RLFACTS_AfterLoadChange_sorted_trim, Figure=fig3, color='c')
+        markersize = 13
+        plt.scatter(loading_arr_plot_noFACTS, v_noFACTS_sorted_trim, Figure=fig3, color=color, s=markersize)
+        plt.scatter(loading_arr_plot_FACTS, v_FACTS_sorted_trim, Figure=fig3, color='g', s=markersize)
+        plt.scatter(loading_arr_plot_FACTS_noSeries, v_FACTS_noSeries_sorted_trim, Figure=fig3, color='k',s=markersize)
+        plt.scatter(loading_arr_plot_RLFACTS, v_RLFACTS_sorted_trim, Figure=fig3, color='r', s=markersize)
+        plt.scatter(loading_arr_plot_RLFACTS_AfterLoadChange, v_RLFACTS_AfterLoadChange_sorted_trim, Figure=fig3, color='c', s=markersize)
         if benchmarkFlag:
-            plt.scatter(loading_arr_plot_RLFACTS_Benchmark, v_RLFACTS_Benchmark_sorted_trim, Figure=fig3, color='y')
-        plt.title('Nose curve from episode with sorted voltage levels')
-        plt.xlabel('Loading [p.u.]', Figure=fig3)
-        plt.ylabel('Bus Voltage [p.u.]', Figure=fig3, color=color)
+            plt.scatter(loading_arr_plot_RLFACTS_Benchmark, v_RLFACTS_Benchmark_sorted_trim, Figure=fig3, color='y', s=markersize)
+        plt.title('Nose-curve from test set with sorted voltage levels', fontsize=23)
+        plt.xlabel('Loading [pu]', Figure=fig3, fontsize=19)
+        plt.ylabel('Bus Voltage [pu]', Figure=fig3, color=color, fontsize=19)
+        plt.xticks(fontsize=14)
+        plt.yticks(fontsize=14)
         # plt.legend(['v no FACTS', 'v FACTS', 'v FACTS no series comp','v RL FACTS', 'v FACTS each ts', 'v RL FACTS benchmark.'], loc=1)
-        plt.legend(['no FACTS', 'FACTS', 'FACTS no series comp', '$Q$-learning FACTS $v^1$', '$Q$-learning FACTS $v^2$', 'RL FACTS benchmark.'], loc=1)
+        plt.legend(['no FACTS', 'shunt+series', 'shunt only', '$Q$-learning $v_1$', '$Q$-learning $v_2$', 'RL benchmark.'], loc=1, fontsize=14)
         plt.grid()
         plt.show()
 
