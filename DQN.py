@@ -539,7 +539,7 @@ class DQN:
                         math.exp(abs(1 - qObj_env_FACTS_eachTS.env_2bus.net.res_bus.vm_pu[1]) * 10) * -20) - np.std(
                 qObj_env_FACTS_eachTS.env_2bus.net.res_line.loading_percent)) / 200
             rewardFactsEachTS.append(rewFactsEachTS)  # FACTS with both series and shunt
-            if (rewFacts-r < 0.01) and (rewFactsNoSeries-r < 0.01):
+            if (rewFacts-r < 0.005) and (rewFactsNoSeries-r < 0.005):
                 performance += 1;
 
         print('RL better than no RL in % wrt to reward: ', (performance / steps)*100)

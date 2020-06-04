@@ -81,13 +81,23 @@ class Critic(nn.Module):
         q2 = self.l6(q2)
         return q1, q2
 
+    # def Q1(self, state, action):
+    #     sa = torch.cat([state, action], 1)
+    #
+    #     q1 = F.relu(self.l1(sa))
+    #     q1 = self.drop_layer1(q1);
+    #     q1 = F.relu(self.l2(q1))
+    #     q1 = self.drop_layer2(q1);
+    #     q1 = self.l3(q1)
+    #     return q1
+
     def Q1(self, state, action):
         sa = torch.cat([state, action], 1)
 
         q1 = F.relu(self.l1(sa))
-        q1 = self.drop_layer1(q1);
+        q1 = self.drop_layer(q1);
         q1 = F.relu(self.l2(q1))
-        q1 = self.drop_layer2(q1);
+        q1 = self.drop_layer(q1);
         q1 = self.l3(q1)
         return q1
 
@@ -747,7 +757,7 @@ class TD3:
         plt.xticks(fontsize=14)
         plt.yticks(fontsize=14)
         # plt.legend(['v no FACTS', 'v FACTS', 'v FACTS no series comp','v RL FACTS', 'v FACTS each ts', 'v RL FACTS benchmark.'], loc=1)
-        plt.legend(['no FACTS', 'shunt+series', 'shunt only', '$TD3 $v_1$', '$TD3 $v_2$', 'RL benchmark.'], loc=1, fontsize=14)
+        plt.legend(['no FACTS', 'shunt+series', 'shunt only', 'TD3 v_1', 'TD3 v_2', 'RL benchmark.'], loc=1, fontsize=14)
         plt.grid()
         plt.show()
 
