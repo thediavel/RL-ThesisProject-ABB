@@ -757,7 +757,7 @@ class TD3:
         plt.xticks(fontsize=14)
         plt.yticks(fontsize=14)
         # plt.legend(['v no FACTS', 'v FACTS', 'v FACTS no series comp','v RL FACTS', 'v FACTS each ts', 'v RL FACTS benchmark.'], loc=1)
-        plt.legend(['no FACTS', 'shunt+series', 'shunt only', 'TD3 v_1', 'TD3 v_2', 'RL benchmark.'], loc=1, fontsize=14)
+        plt.legend(['no FACTS', 'shunt+series', 'shunt only', 'TD3 $v_1$', 'TD3 $v_2$', 'RL benchmark.'], loc=1, fontsize=14)
         plt.grid()
         plt.show()
 

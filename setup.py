@@ -741,9 +741,6 @@ class powerGrid_ieee2:
         #self.net.sgen.q_mvar = self.net.sgen.q_mvar * scalingFactorPower;
 
     def runNoFACTS(self, busVoltageInd):
-        #Start from 0 when inside for loop
-        self.stateIndex = 859
-
         # Bypass FACTS devices if wantd
         self.net.switch.at[0, 'closed'] = True
         self.net.switch.at[1, 'closed'] = False
@@ -776,6 +773,104 @@ class powerGrid_ieee2:
         plt.ylabel('Voltage [pu]', fontsize= 18)
         plt.title('Bus 2 Voltage with shunt+series FACTS ', fontsize= 22)
         plt.show()
+
+    def runNoRL(self, busVoltageInd):
+        # Print the load profile:
+        # loadProfilesScaled = self.loadProfile / (sum(self.loadProfile) / len(self.loadProfile))
+        # P = loadProfilesScaled * self.nominalP
+        # Q = loadProfilesScaled * self.nominalQ
+        # xaxis = range(0, len(self.loadProfile))
+        # fig, ax1 = plt.subplots()
+        # ax1.set_title('Load profile', fontsize=24)
+        # ax1.set_xlabel('Time step on load profile [-]', fontsize=20)
+        # ax1.set_ylabel('Active power [MW] ', color='r', fontsize=20)
+        # ax1.plot(xaxis, P, color='r')
+        # ax1.set_ylim(0, 500)
+        # plt.xticks(fontsize=16)
+        # plt.yticks(fontsize=16)
+        # ax2 = ax1.twinx()
+        # ax2.set_ylabel('Reactive power [Mvar] ', color='tab:blue', fontsize=20)
+        # ax2.plot(xaxis, Q, color='tab:blue')
+        # ax2.set_ylim(0,500)
+        # plt.xticks(fontsize=16)
+        # plt.yticks(fontsize=16)
+        # plt.grid()
+        # plt.show()
+        #
+        # #Zoomed in version:
+        # fig, ax1 = plt.subplots()
+        # ending = 1000-1
+        # ax1.set_title('Load profile', fontsize=24)
+        # ax1.set_xlabel('Time step on load profile [-]', fontsize=20)
+        # ax1.set_ylabel('Active power [MW] ', color='r', fontsize=20)
+        # ax1.plot(xaxis[0:ending], P[0:ending], color='r')
+        # ax1.set_ylim(0,500)
+        # plt.xticks(fontsize=16)
+        # plt.yticks(fontsize=16)
+        # ax2 = ax1.twinx()
+        # ax2.set_ylabel('Reactive power [Mvar] ', color='tab:blue', fontsize=20)
+        # ax2.plot(xaxis[0:ending], Q[0:ending], color='tab:blue')
+        # ax2.set_ylim(0,500)
+        # plt.xticks(fontsize=16)
+        # plt.yticks(fontsize=16)
+        # plt.grid()
+        # plt.show()
+
+        #SHUNT+SERIES:
+        # Bypass FACTS devices if wantd
+        self.net.switch.at[0, 'closed'] = True
+        self.net.switch.at[1, 'closed'] = True
+        self.net.controller.in_service[0] = True
+        self.net.controller.in_service[1] = False
+        self.shuntControl.ref = 1
+        self.seriesControl.ref = 50
+
+        # Create array
+        v_arr = []
+        v_arr_so = []
+        l_arr = []
+
+        # Loop through all loadings
+        for i in range(0, 600):  # len(self.loadProfile)
+        # Increment and run environment
+            self.stateIndex += 1;
+            self.scaleLoadAndPowerValue(self.stateIndex);
+            self.runEnv(True);
+            # Store result for current settings
+            v_arr_so.append(self.net.res_bus.vm_pu[busVoltageInd])
+            l_arr.append(self.stateIndex)
+
+        #SHUNT ONLY
+        self.setMode('test')
+        self.net.switch.at[0, 'closed'] = True
+        self.net.switch.at[1, 'closed'] = False
+        self.net.controller.in_service[0] = True
+        self.net.controller.in_service[1] = True
+
+        for i in range(0, 600):  # len(self.loadProfile)
+        # Increment and run environment
+            self.stateIndex += 1;
+            self.scaleLoadAndPowerValue(self.stateIndex);
+            self.runEnv(True);
+            # Store result for current settings
+            v_arr.append(self.net.res_bus.vm_pu[busVoltageInd])
+
+        # Plot result
+        print(max(v_arr))
+        print(min(v_arr))
+        print(max(v_arr_so))
+        print(min(v_arr_so))
+        plt.plot(l_arr, v_arr)
+        plt.plot(l_arr, v_arr_so)
+        plt.grid()
+        plt.xlabel('Time step on load profile [-]', fontsize=20)
+        plt.ylabel('Voltage [pu]', fontsize=20)
+        plt.title('Bus 2 Voltage with non-RL FACTS ', fontsize=24)
+        plt.legend(['shunt+series','shunt only'], fontsize=12)
+        plt.xticks(fontsize=16)
+        plt.yticks(fontsize=16)
+        plt.show()
+
 
 
 ##Load Profile data has been pickled already, do not run this function for now

@@ -3,6 +3,7 @@ from DQN import DQN
 # import threading
 # import time
 # import logging
+from setup import powerGrid_ieee2
 
 
 ################### Q LEARNING ###########################
@@ -56,6 +57,12 @@ from DQN import DQN
 #dqn5=DQN(2, 0.001, 3000, 32, 0.7, 50000, 6, 1, 0.99, 200,1000)
 #dqn6=DQN(2, 0.001, 2000, 32, 0.6, 100000, 6, 1, 0.99, 200,1000)
 ############## end block ################
-dqn7=DQN(2, 0.001, 3000, 32, 0.6, 50000, 6, 1, 0.99, 200,1000)
+#dqn7=DQN(2, 0.001, 3000, 32, 0.6, 50000, 6, 1, 0.99, 200,1000)
 #dqn7.train()
 #dqn4.test(10,24,1)
+
+
+# Create load profile graph and joined graph  for report
+#noRL = powerGrid_ieee2('dqn')
+#noRL.setMode('test')
+#noRL.runNoRL(1)
