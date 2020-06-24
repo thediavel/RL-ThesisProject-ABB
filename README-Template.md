@@ -78,7 +78,7 @@ Give an example
 
 ### Generating Load Profile Data
 
-We have a load bus in the 2 bus system, where the load keeps on changing. To imitate the load fluctuations that we see commonly in the EPS systems, we make use of enlopy package which exposes several functionalities that can be used in this context to generate load as well as power profile. In setup file, createLoadProfile() function has been implemented for this sole purpose. Executing this function shall generate load and power profile for one month with values for every 5 minutes and save them in a pickle file. One can tweak this function as per their requirements and rerun the function to get a different load profile.
+There is a load bus in the 2 bus system, where the load keeps on changing. To imitate the load fluctuations that we see commonly in the EPS systems, enlopy package has been used as it exposes several functionalities that can be used in this context to generate load as well as power profile. In setup.py file, createLoadProfile() function has been implemented for this sole purpose. Executing this function shall generate load and power profile for one month with values for every 5 minutes and save them in a pickle file. One can tweak this function as per their requirement and rerun the function to get a different load profile.
 ```
 createLoadProfile()
 ```
