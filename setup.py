@@ -15,7 +15,8 @@ import statistics as stat
 from FACTScontrol import SeriesFACTS, ShuntFACTS
 pd.options.display.float_format = '{:.4g}'.format
 
-#### fix lineIndex in ieee-4
+### This 4-bus class is not complete as of handover to ABB PG and Magnus Tarle.
+# The 2-bus class further below is however complete.
 class powerGrid_ieee4:
     def __init__(self, numberOfTimeStepsPerState=4):
         print('in init. Here we lay down the grid structure and load some random state values based on IEEE dataset');
@@ -285,6 +286,8 @@ class powerGrid_ieee4:
         return q_comp
 
 
+#The class for the 2-bus test network used in the Master Thesis by Joakim Oldeen & Vishnu Sharma.
+#The class also include several methods used by different RL algorithms such as taking action, calculating reward, recieving states and more
 class powerGrid_ieee2:
     def __init__(self,method):
         #print('in init. Here we lay down the grid structure and load some random state values based on IEEE dataset');
