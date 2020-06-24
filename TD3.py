@@ -465,11 +465,12 @@ class TD3:
             temp.env_2bus.stateIndex += 1;
             temp.env_2bus.scaleLoadAndPowerValue(temp.env_2bus.stateIndex)
             temp.env_2bus.runEnv(False);
-        currentState.append(self.env_2bus.getCurrentStateForDQN())
-        currentState[3].extend(self.env_2bus.getCurrentStateForDQN())
+        currentState.append(temp.env_2bus.getCurrentStateForDQN())
+        currentState[3].extend(temp.env_2bus.getCurrentStateForDQN())
         currentState = np.array(currentState) # Only used for RLFACTS case
 
         # Need seperate copy for each scenario
+        stateIndex = temp.env_2bus.stateIndex
         qObj_env_noFACTS = copy.deepcopy(temp)
         qObj_env_FACTS = copy.deepcopy(temp)
         qObj_env_RLFACTS = copy.deepcopy(temp)
@@ -484,7 +485,11 @@ class TD3:
 
         # To plot horizontal axis in nose-curve
         load_nom_pu = 2 #the nominal IEEE load in pu
+        print(stateIndex)
+        print(qObj_env_RLFACTS.env_2bus.stateIndex)
         loading_arr = list(load_nom_pu*(loadProfile[stateIndex:stateIndex + steps] / stat.mean(loadProfile)))
+        loading_arr_afterLoadChange = list(load_nom_pu * (loadProfile[stateIndex+1:stateIndex + steps+1] / stat.mean(loadProfile))) # to get proper sorting for voltage after load change
+
 
         # Loop through each load
         for i in range(0, steps):
@@ -590,7 +595,8 @@ class TD3:
 
 
         # Make plots
-        i_list = list(range(860, 860+steps))
+        i_list = list(range(863, 863+steps))
+        lw = 1.8
         fig, ax1 = plt.subplots()
         color = 'tab:blue'
         ax1.set_title('Voltage and line loading standard deviation for test set', fontsize=23)
@@ -624,25 +630,44 @@ class TD3:
         plt.show()
 
         # Plot Rewards
-        fig2 = plt.figure()
-        color = 'tab:blue'
-        plt.plot(i_list, rewardNoFacts, Figure=fig2, color=color)
-        plt.plot(i_list, rewardFacts, Figure=fig2, color='g')
-        plt.plot(i_list, rewardFactsNoSeries, Figure=fig2, color='k')
-        plt.plot(i_list, rewardFactsRL, Figure=fig2, color='r')
-        # plt.plot(i_list, rewardFactsEachTS, Figure=fig2, color='c')
+        fig2, (ax1, ax2, ax3) = plt.subplots(3, 1, sharex=True, sharey=True)
+        fig2.suptitle('Rewards along the test set', fontsize=24)
+        plt.xlabel('Time step [-]', Figure=fig2, fontsize=20)
+        ax1.set_ylabel('Reward [-]', Figure=fig2, fontsize=20)
+        ax2.set_ylabel('Reward [-]', Figure=fig2, fontsize=20)
+        ax3.set_ylabel('Reward [-]', Figure=fig2, fontsize=20)
+        plt.xticks(fontsize=16)
+        plt.yticks(fontsize=16)
+        xtickers = [800, 900, 1000, 1100, 1200, 1300, 1400]
+        ytickers = [0.5, 0.6, 0.7, 0.8, 0.9]
+        ax1.set_xticklabels(xtickers, fontsize=16)
+        ax1.set_yticklabels(ytickers, fontsize=16)
+        ax2.set_xticklabels(xtickers, fontsize=16)
+        ax2.set_yticklabels(ytickers, fontsize=16)
+        ax3.set_xticklabels(xtickers, fontsize=16)
+        ax3.set_yticklabels(ytickers, fontsize=16)
+        ax1.plot(i_list, rewardFactsRL, Figure=fig2, color='tab:red')
         if benchmarkFlag:
-            plt.plot(i_list, rewardFactsBenchmark, Figure=fig2, color='y')
-        plt.title('Rewards along the test set', fontsize=23)
-        plt.xlabel('Time step [-]', Figure=fig2, fontsize=19)
-        plt.ylabel('Reward [-]', Figure=fig2, fontsize=19)
-        plt.xticks(fontsize=14)
-        plt.yticks(fontsize=14)
-        # plt.legend(['no FACTS', 'FACTS', 'FACTS no series comp', 'RL FACTS', 'FACTS each ts', 'RL FACTS benchmark.'],
-        #           loc=1)
-        plt.legend(['no FACTS', 'shunt+series', 'shunt only', 'TD3', 'RL benchmark.'],
-                   loc=1, fontsize=14)
-        plt.grid()
+            ax1.plot(i_list, rewardFactsBenchmark, Figure=fig2, color='tab:olive')
+        ax2.plot(i_list, rewardFacts, Figure=fig2, color='tab:green')
+        ax2.plot(i_list, rewardFactsNoSeries, Figure=fig2, color='k')
+        ax3.plot(i_list, rewardNoFacts, Figure=fig2, color='tab:brown')
+        # plt.title('Rewards along the test set', fontsize=24)
+        ax1.legend(['TD3', 'RL benchmark'],
+                   loc=3, fontsize=14)
+        ax2.legend(['shunt+series', 'shunt only'],
+                   loc=3, fontsize=14)
+        ax3.legend(['no FACTS'],
+                   loc=3, fontsize=14)
+        ax1.grid()
+        ax1.minorticks_on()
+        ax1.grid(b=True, which='minor', color='#999999', linestyle='-', alpha=0.2)
+        ax2.grid()
+        ax2.minorticks_on()
+        ax2.grid(b=True, which='minor', color='#999999', linestyle='-', alpha=0.2)
+        ax3.grid()
+        ax3.minorticks_on()
+        ax3.grid(b=True, which='minor', color='#999999', linestyle='-', alpha=0.2)
         plt.show()
 
         ## Calculate measure for comparing RL and Benchmark wrt reward.
@@ -664,6 +689,7 @@ class TD3:
 
         # Nosecurve:
         loading_arr_sorted = sorted(loading_arr)
+        loading_arr_afterLoadChange_sorted = sorted(loading_arr_afterLoadChange)
 
         # Sort the measurements
         v_noFACTS_sorted = [x for _, x in sorted(zip(loading_arr, v_noFACTS))]
@@ -679,15 +705,15 @@ class TD3:
         if benchmarkFlag:
             v_RLFACTS_Benchmark_sorted = [x for _, x in sorted(zip(loading_arr, v_RLFACTS_Benchmark))]
             lp_max_RLFACTS_Benchmark_sorted = [x for _, x in sorted(zip(loading_arr, lp_max_RLFACTS_Benchmark))]
-        v_RLFACTS_AfterLoadChange_sorted = [x for _, x in sorted(zip(loading_arr, v_RLFACTS_AfterLoadChange))]
-        lp_max_RLFACTS_AfterLoadChange_sorted = [x for _, x in sorted(zip(loading_arr, lp_max_RLFACTS_AfterLoadChange))]
+        v_RLFACTS_AfterLoadChange_sorted = [x for _, x in sorted(zip(loading_arr_afterLoadChange, v_RLFACTS_AfterLoadChange))]
+        lp_max_RLFACTS_AfterLoadChange_sorted = [x for _, x in
+                                                 sorted(zip(loading_arr_afterLoadChange, lp_max_RLFACTS_AfterLoadChange))]
         print('')
         print('maximum loading percentage noFACTS  ', max(lp_max_noFACTS))
         print('maximum loading percentage Shunt+Series  ', max(lp_max_FACTS))
         print('maximum loading percentage shunt only  ', max(lp_max_FACTS_noSeries))
         print('maximum loading percentage after action RL: ', max(lp_max_RLFACTS_Benchmark))
         print('maximum loading percentage after load change RL: ', max(lp_max_RLFACTS_AfterLoadChange))
-
 
         # Trim arrays to only include values <= X % loading percentage
         lp_limit_for_noseCurve = 100
@@ -699,7 +725,8 @@ class TD3:
         if benchmarkFlag:
             lp_max_RLFACTS_Benchmark_sorted_trim = [x for x in lp_max_RLFACTS_Benchmark_sorted if
                                                     x <= lp_limit_for_noseCurve]
-        lp_max_RLFACTS_AfterLoadChange_sorted_trim = [x for x in lp_max_RLFACTS_AfterLoadChange_sorted if x <= lp_limit_for_noseCurve]
+        lp_max_RLFACTS_AfterLoadChange_sorted_trim = [x for x in lp_max_RLFACTS_AfterLoadChange_sorted if
+                                                      x <= lp_limit_for_noseCurve]
 
         v_noFACTS_sorted_trim = v_noFACTS_sorted[0:len(lp_max_noFACTS_sorted_trim)]
         v_FACTS_sorted_trim = v_FACTS_sorted[0:len(lp_max_FACTS_sorted_trim)]
@@ -708,7 +735,8 @@ class TD3:
         v_FACTS_eachTS_sorted_trim = v_FACTS_eachTS_sorted[0:len(lp_max_FACTS_eachTS_sorted_trim)]
         if benchmarkFlag:
             v_RLFACTS_Benchmark_sorted_trim = v_RLFACTS_Benchmark_sorted[0:len(lp_max_RLFACTS_Benchmark_sorted_trim)]
-        v_RLFACTS_AfterLoadChange_sorted_trim = v_RLFACTS_AfterLoadChange_sorted[0:len(lp_max_RLFACTS_AfterLoadChange_sorted_trim)]
+        v_RLFACTS_AfterLoadChange_sorted_trim = v_RLFACTS_AfterLoadChange_sorted[
+                                                0:len(lp_max_RLFACTS_AfterLoadChange_sorted_trim)]
 
         loading_arr_plot_noFACTS = loading_arr_sorted[0:len(lp_max_noFACTS_sorted_trim)]
         loading_arr_plot_FACTS = loading_arr_sorted[0:len(lp_max_FACTS_sorted_trim)]
@@ -717,9 +745,10 @@ class TD3:
         loading_arr_plot_FACTS_eachTS = loading_arr_sorted[0:len(lp_max_FACTS_eachTS_sorted_trim)]
         if benchmarkFlag:
             loading_arr_plot_RLFACTS_Benchmark = loading_arr_sorted[0:len(lp_max_RLFACTS_Benchmark_sorted_trim)]
-        loading_arr_plot_RLFACTS_AfterLoadChange = loading_arr_sorted[1:len(lp_max_RLFACTS_AfterLoadChange_sorted_trim)+1]
+        loading_arr_plot_RLFACTS_AfterLoadChange = loading_arr_afterLoadChange_sorted[
+                                                   0:len(lp_max_RLFACTS_AfterLoadChange_sorted_trim) + 0]
 
-        #Print result wrt trimmed voltage
+        # Print result wrt trimmed voltage
         print('')
         print('max voltage facts:', np.max(v_FACTS_sorted_trim))
         print('max voltage facts with RL:', np.max(v_RLFACTS_sorted_trim))
@@ -739,25 +768,26 @@ class TD3:
         print('mean voltage RL after load change', np.mean(v_RLFACTS_AfterLoadChange))
         print('std voltage RL after load change', np.std(v_RLFACTS_AfterLoadChange))
 
-
         # Plot Nose Curve
         fig3 = plt.figure()
-        color = 'tab:blue'
-        markersize = 13
-        plt.scatter(loading_arr_plot_noFACTS, v_noFACTS_sorted_trim, Figure=fig3, color=color, s=markersize)
-        plt.scatter(loading_arr_plot_FACTS, v_FACTS_sorted_trim, Figure=fig3, color='g', s=markersize)
-        plt.scatter(loading_arr_plot_FACTS_noSeries, v_FACTS_noSeries_sorted_trim, Figure=fig3, color='k',s=markersize)
-        plt.scatter(loading_arr_plot_RLFACTS, v_RLFACTS_sorted_trim, Figure=fig3, color='r', s=markersize)
-        plt.scatter(loading_arr_plot_RLFACTS_AfterLoadChange, v_RLFACTS_AfterLoadChange_sorted_trim, Figure=fig3, color='c', s=markersize)
+        markersize =44
+        plt.scatter(loading_arr_plot_noFACTS, v_noFACTS_sorted_trim, marker='x', Figure=fig3, color='tab:brown', s=markersize)
+        plt.scatter(loading_arr_plot_FACTS, v_FACTS_sorted_trim, marker='v', Figure=fig3, color='tab:green', s=markersize)
+        plt.scatter(loading_arr_plot_FACTS_noSeries, v_FACTS_noSeries_sorted_trim, marker='^', Figure=fig3, color='k',
+                    s=markersize)
+        plt.scatter(loading_arr_plot_RLFACTS, v_RLFACTS_sorted_trim, marker='D', Figure=fig3, color='tab:red', s=markersize*1.6)
+        plt.scatter(loading_arr_plot_RLFACTS_AfterLoadChange, v_RLFACTS_AfterLoadChange_sorted_trim, marker='d', Figure=fig3,
+                    color='tab:blue', s=markersize)
         if benchmarkFlag:
-            plt.scatter(loading_arr_plot_RLFACTS_Benchmark, v_RLFACTS_Benchmark_sorted_trim, Figure=fig3, color='y', s=markersize)
-        plt.title('Nose-curve from test set with sorted voltage levels', fontsize=23)
-        plt.xlabel('Loading [pu]', Figure=fig3, fontsize=19)
-        plt.ylabel('Bus Voltage [pu]', Figure=fig3, color=color, fontsize=19)
-        plt.xticks(fontsize=14)
-        plt.yticks(fontsize=14)
+            plt.plot(loading_arr_plot_RLFACTS_Benchmark, v_RLFACTS_Benchmark_sorted_trim, Figure=fig3, color='tab:olive', linewidth=lw*1.5)#, s=markersize, marker='*')
+        plt.title('Nose-curve from test set with sorted voltage levels', fontsize=24)
+        plt.xlabel('Loading [pu]', Figure=fig3, fontsize=20)
+        plt.ylabel('Bus Voltage [pu]', Figure=fig3, fontsize=20)
+        plt.xticks(fontsize=16)
+        plt.yticks(fontsize=16)
         # plt.legend(['v no FACTS', 'v FACTS', 'v FACTS no series comp','v RL FACTS', 'v FACTS each ts', 'v RL FACTS benchmark.'], loc=1)
-        plt.legend(['no FACTS', 'shunt+series', 'shunt only', 'TD3 $v_1$', 'TD3 $v_2$', 'RL benchmark.'], loc=1, fontsize=14)
+        plt.legend(['RL benchmark', 'no FACTS', 'shunt+series', 'shunt only', 'TD3 $v_1$', 'TD3 $v_2$'], loc=3, fontsize=16)
         plt.grid()
         plt.show()
+
 
