@@ -1,4 +1,5 @@
 import pandapower.control as ct
+## Creates custom PI-controllers for the shunt and series FACTS device used in the test network.
 
 # SHUNT CONTROLLER
 class ShuntFACTS(ct.basic_controller.Controller):

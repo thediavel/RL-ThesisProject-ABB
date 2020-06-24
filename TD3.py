@@ -419,6 +419,8 @@ class TD3:
         print(' max-min rewArr: ', max(rewArr), min(rewArr))
         return currentStateMeasurements, busVoltage, lp_max, lp_std, reward
 
+    # Compare performance wrt reward and voltage stability between RL agent, benchmark and non-RL cases.
+    # Creates selection of graphs and prints other results.
     def comparePerformance(self, steps, oper_upd_interval, bus_index_shunt, bus_index_voltage, line_index,benchmarkFlag):
         v_noFACTS = []
         lp_max_noFACTS = []

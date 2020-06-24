@@ -9,6 +9,7 @@ import copy
 import statistics as stat
 from datetime import datetime
 
+# Q-learning class including constructor, trainingand testing.
 class qLearning:
     def __init__(self, learningRate, decayRate, numOfEpisodes, stepsPerEpisode, epsilon ,annealingConstant, annealAfter, checkpoint=''):
         # Intervals which discretizes measurements into state representation
@@ -308,6 +309,8 @@ class qLearning:
         lp_std = measAfterAction[2]
         return nextStateMeasurements, busVoltage, lp_max, lp_std, reward
 
+    # Compare performance wrt reward and voltage stability between RL agent, benchmark and non-RL cases.
+    # Creates selection of graphs and prints other results.
     def comparePerformance(self, steps, oper_upd_interval, bus_index_shunt, bus_index_voltage, line_index,
                            benchmarkFlag):
         v_noFACTS = []
