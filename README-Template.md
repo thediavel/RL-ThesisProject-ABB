@@ -2,7 +2,7 @@
 With increased penetration of renewable energy sources, maintaining equilibrium
 between production and consumption in the world’s electrical power systems
 (EPS) becomes more and more challenging. Through this project we aim to obtain voltage stability
-in the EPS circuits using Reinforcement Learning. We implement q-learning, DQN and TD3 over a 2 bus system.
+in the EPS circuits using Reinforcement Learning. We implement q-learning, DQN and TD3 over a 2 bus system with a varying load profile.
 The project was carried out at ABB by Vishnu Sharma and Joakim Oldeen as a master thesis project. More information
  can be found here : *Link to published report with same name as project*
 
@@ -57,7 +57,7 @@ qlAgent.train()
 dqnAgent.train()
 td3Agent.train()
 ```
-During training the agent will save checkpoints at certain intervals and do a print() showing the checkpoints have been reached.
+During training the agent will save checkpoints at certain intervals and do a print() showing the checkpoints have been reached. Furthermore, we log the training results in terms of rewards and training error using tensorboard while training.
 Training an agent with the hyper-parameters shown above takes about 5 hours on a device with 8th gen i7 2.6 GHz processor and Nvidia Quadpro P1000 CUDA-enabled graphics card.
 
 
@@ -97,6 +97,12 @@ self.env_2bus.stateIndex += 3+50 # Plus 3 to be on even state index as RL which 
 This way you adjust the starting point 50 time steps, since you already trained for that.
 Then you can run runBenchmarkCase(nTimeSteps=50) another time. Then you add another 50 to the self.env_2bus.stateIndex and repeat the process until finished.
 
+### Generating Load Profile Data
+
+There is a load bus in the 2 bus system, where the load keeps on changing. To imitate the load fluctuations that we see commonly in the EPS systems, [enlopy package](https://github.com/energy-modelling-toolkit/enlopy) has been used as it exposes several functionalities that can be used in this context to generate load as well as power profile. In **setup.py** file, createLoadProfile() function has been implemented for this sole purpose. Executing this function shall generate load and power profile with data for every 5 minutes for 30 days and save them in a pickle file. One can tweak this function as per their requirement and rerun the function to get a different load profile.
+```
+createLoadProfile()
+```
 
 ## Built With
 
