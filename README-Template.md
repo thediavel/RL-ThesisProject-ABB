@@ -18,8 +18,13 @@ Project requires python 3.6, torch 1.4.0 and other packages mentioned in **requi
 
 
 ### Installing
-
-One can install all these dependencies using the pip command as shown below
+You can start by creating a virtual environment (on Windows)
+```
+pip install virtualenv
+virtualenv venv
+.\venv\Scripts\activate
+```
+Next, you can install all these dependencies using the pip command as shown below
 
 ```
 pip install setuptools==41.0.0
