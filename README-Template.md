@@ -99,22 +99,22 @@ Then you can run runBenchmarkCase(nTimeSteps=50) another time. Then you add anot
 
 ### Generating Load Profile Data
 
-There is a load bus in the 2 bus system, where the load keeps on changing. To imitate the load fluctuations that we see commonly in the EPS systems, [enlopy package](https://github.com/energy-modelling-toolkit/enlopy) has been used as it exposes several functionalities that can be used in this context to generate load as well as power profile. In **setup.py** file, createLoadProfile() function has been implemented for this sole purpose. Executing this function shall generate load and power profile with data for every 5 minutes for 30 days and save them in a pickle file. One can tweak this function as per their requirement and rerun the function to get a different load profile.
+There is a load bus in the 2 bus system, where the load keeps on changing. To imitate the load fluctuations that we see commonly in the EPS systems, [enlopy package](https://enlopy.readthedocs.io/en/latest/) has been used as it exposes several functionalities that can be used in this context to generate load as well as power profile. In **setup.py** file, createLoadProfile() function has been implemented for this sole purpose. Executing this function shall generate load and power profile with data for every 5 minutes for 30 days and save them in a pickle file. One can tweak this function as per their requirement and rerun the function to get a different load profile.
 ```
 createLoadProfile()
 ```
 
 ## Built With
 
-* [Dropwizard](http://www.dropwizard.io/1.0.2/docs/) - The web framework used
-* [Maven](https://maven.apache.org/) - Dependency Management
-* [ROME](https://rometools.github.io/rome/) - Used to generate RSS Feeds
+* [Pytorch](https://pytorch.org/) - Used to construct and train Neural Networks
+* [Pandapower](https://www.pandapower.org/) - Electrical Power Systems Package
+* [Enlopy](https://enlopy.readthedocs.io/en/latest/) - Used to generate Load Profile
 
 
 ## Authors
 
 * **Joakim Oldeen*  - [jplOldeen](https://github.com/jplOldeen)
-* **Visnu Sharma*  - [thediavel](https://github.com/thediavel)
+* **Vishnu Sharma*  - [thediavel](https://github.com/thediavel)
 
 ## Acknowledgments
 
