@@ -68,26 +68,35 @@ qlAgent.comparePerformance(steps=600, oper_upd_interval=6, bus_index_shunt=1, bu
 dqnAgent.comparePerformance(steps=600, oper_upd_interval=6, bus_index_shunt=1, bus_index_voltage=1, line_index=1, benchmarkFlag=True)
 td3Agent.comparePerformance(steps=600, oper_upd_interval=6, bus_index_shunt=1, bus_index_voltage=1, line_index=1, benchmarkFlag=True)
 ```
+The comparePerformance method creates a set of graphs for analysing the performance of the RL agent with respect to reward and voltage stability.
+Example of printed graphs are Figure 4.2-4.7 in the published report.
+There are also a set of printouts which are further explained in the published report.
 
 ### Creating a new benchmark
+The benchmark is a case that is compared to when running the comparePerformance method. The benchmark is further explained in the published report.
+If the 2-bus test network is changed, it might call for a new benchmark.
 
-Explain what these tests test and why
-
+The method for creating a benchmark is located in the DQN class and to be able to use it one must first construct a DQN object, although the benchmark is not an actual RL agent.
+To create a new benchmark you first have to make sure there are no existing benchmark files in the 'Data' folder. Once they are removed you can create a new benchmark through
 ```
-Give an example
-```
-
-### And coding style tests
-
-Explain what these tests test and why
-
-```
-Give an example
+dqnAgent.runBenchmarkCase(nTimeSteps=600):
 ```
 
-## Deployment
+Creating a benchmark with 600 time steps is computationally expensive. It took about 70 hours on the same system as the training took 5 hours.
+Therefore you might want to divide the creation of the benchmark into intervals. 
+This can be done by for first making a benchmark with for example nTimeSteps=50. When that is complete you go into the code 
+of the runBenchmarkCase method and change self.env_2bus.stateIndex such that the first lines of code look like this:
 
-Add additional notes about how to deploy this on a live system
+```
+# Make sure to be in test mode:
+self.env_2bus.setMode('test')
+self.env_2bus.reset()
+self.env_2bus.stateIndex += 3+50 # Plus 3 to be on even state index as RL which uses first 3 time steps as history
+````
+
+This way you adjust the starting point 50 time steps, since you already trained for that.
+Then you can run runBenchmarkCase(nTimeSteps=50) another time. Then you add another 50 to the self.env_2bus.stateIndex and repeat the process until finished.
+
 
 ## Built With
 
@@ -95,27 +104,32 @@ Add additional notes about how to deploy this on a live system
 * [Maven](https://maven.apache.org/) - Dependency Management
 * [ROME](https://rometools.github.io/rome/) - Used to generate RSS Feeds
 
-## Contributing
-
-Please read [CONTRIBUTING.md](https://gist.github.com/PurpleBooth/b24679402957c63ec426) for details on our code of conduct, and the process for submitting pull requests to us.
-
-## Versioning
-
-We use [SemVer](http://semver.org/) for versioning. For the versions available, see the [tags on this repository](https://github.com/your/project/tags). 
 
 ## Authors
 
-* **Billie Thompson** - *Initial work* - [PurpleBooth](https://github.com/PurpleBooth)
-
-See also the list of [contributors](https://github.com/your/project/contributors) who participated in this project.
-
-## License
-
-This project is licensed under the MIT License - see the [LICENSE.md](LICENSE.md) file for details
+* **Joakim Oldeen*  - [jplOldeen](https://github.com/jplOldeen)
+* **Visnu Sharma*  - [thediavel](https://github.com/thediavel)
 
 ## Acknowledgments
 
-* Hat tip to anyone whose code was used
-* Inspiration
-* etc
+This master thesis project has been carried out at and on
+behalf of business unit grid integration at ABB FACTS in Västerås. We want
+to thank ABB and everyone who has been involved in our process, helping us
+investigate the world of reinforcement learning and flexible alternating current
+transmission systems.
+
+A special thanks to our supervisor Magnus Tarle for his guidance and input
+in the various topics spanning this thesis. Thank you Mats Larsson, for
+educating us and helping us find a path. Thank you Jonathan Hanning and
+Lexuan Meng for being there when we had questions and for supplying us
+with the tools needed to complete our tasks. Also, without the support from
+our subject reader Per Mattson, this thesis would have become much harder,
+thank you!
+
+Lastly, we would like to thank one another; without our combined background,
+knowledge and perseverance this thesis would not have been the same.
+
+Regards
+
+Joakim Oldeen & Vishnu Sharma
 
