@@ -71,6 +71,7 @@ td3Agent.comparePerformance(steps=600, oper_upd_interval=6, bus_index_shunt=1, b
 The comparePerformance method creates a set of graphs for analysing the performance of the RL agent with respect to reward and voltage stability.
 Example of printed graphs are Figure 4.2-4.7 in the published report.
 There are also a set of printouts which are further explained in the published report.
+Running the comparePerformance method takes about 5-10 minutes.
 
 ### Creating a new benchmark
 The benchmark is a case that is compared to when running the comparePerformance method. The benchmark is further explained in the published report.
