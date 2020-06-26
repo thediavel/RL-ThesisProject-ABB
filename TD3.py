@@ -511,7 +511,7 @@ class TD3:
             if (rewFacts-r < 0.01) and (rewFactsNoSeries-r < 0.01):
                 performance+=1
 
-        print('RL better than no RL in % wrt to reward: ', (performance / steps)*100)
+        print('RL better than no RL in % wrt to reward (Upsilon): ', (performance / steps)*100)
         print('max reward facts:', np.max(rewardFacts))
         print('max reward facts with RL:', np.max(rewardFactsRL))
         print('max reward facts no series:', np.max(rewardFactsNoSeries))
@@ -633,10 +633,10 @@ class TD3:
             PerformanceNoFacts += math.sqrt((rewardNoFacts[i] - rewardFactsBenchmark[i]) ** 2)
 
         print('')
-        print('performance FACTS RL: ', performanceFactsRL)
-        print('performance FACTS shunt+series: ', performanceFacts)
-        print('performance FACTS shunt only: ', performanceFactsnoSeries)
-        print('performance no FACTS: ', PerformanceNoFacts)
+        print('performance FACTS RL (Psi_rootsquare): ', performanceFactsRL)
+        print('performance FACTS shunt+series (Psi_rootsquare): ', performanceFacts)
+        print('performance FACTS shunt only (Psi_rootsquare): ', performanceFactsnoSeries)
+        print('performance no FACTS (Psi_rootsquare): ', PerformanceNoFacts)
 
         # Nosecurve:
         loading_arr_sorted = sorted(loading_arr)
@@ -701,23 +701,23 @@ class TD3:
 
         # Print result wrt trimmed voltage
         print('')
-        print('max voltage facts:', np.max(v_FACTS_sorted_trim))
-        print('max voltage facts with RL:', np.max(v_RLFACTS_sorted_trim))
-        print('max voltage facts no series:', np.max(v_FACTS_noSeries_sorted_trim))
-        print('min voltage facts:', np.min(v_FACTS_sorted_trim))
-        print('min voltage facts with RL:', np.min(v_RLFACTS_sorted_trim))
-        print('min voltage facts no series:', np.min(v_FACTS_noSeries_sorted_trim))
-        print('mean voltage facts:', np.mean(v_FACTS_sorted_trim))
-        print('mean voltage facts with RL:', np.mean(v_RLFACTS_sorted_trim))
-        print('mean voltage facts no series:', np.mean(v_FACTS_noSeries_sorted_trim))
-        print('std voltage facts:', np.std(v_FACTS_sorted_trim))
-        print('std voltage facts with RL:', np.std(v_RLFACTS_sorted_trim))
-        print('std voltage facts no series:', np.std(v_FACTS_noSeries_sorted_trim))
+        print('max voltage facts (v1):', np.max(v_FACTS_sorted_trim))
+        print('max voltage facts with RL (v1):', np.max(v_RLFACTS_sorted_trim))
+        print('max voltage facts no series (v1):', np.max(v_FACTS_noSeries_sorted_trim))
+        print('min voltage facts (v1):', np.min(v_FACTS_sorted_trim))
+        print('min voltage facts with RL (v1):', np.min(v_RLFACTS_sorted_trim))
+        print('min voltage facts no series (v1):', np.min(v_FACTS_noSeries_sorted_trim))
+        print('mean voltage facts (v1):', np.mean(v_FACTS_sorted_trim))
+        print('mean voltage facts with RL (v1):', np.mean(v_RLFACTS_sorted_trim))
+        print('mean voltage facts no series (v1):', np.mean(v_FACTS_noSeries_sorted_trim))
+        print('std voltage facts (v1):', np.std(v_FACTS_sorted_trim))
+        print('std voltage facts with RL (v1):', np.std(v_RLFACTS_sorted_trim))
+        print('std voltage facts no series (v1):', np.std(v_FACTS_noSeries_sorted_trim))
         print('')
-        print('max voltage RL after load change', np.max(v_RLFACTS_AfterLoadChange))
-        print('min voltage RL after load change', np.min(v_RLFACTS_AfterLoadChange))
-        print('mean voltage RL after load change', np.mean(v_RLFACTS_AfterLoadChange))
-        print('std voltage RL after load change', np.std(v_RLFACTS_AfterLoadChange))
+        print('max voltage RL after load change (v2): ', np.max(v_RLFACTS_AfterLoadChange))
+        print('min voltage RL after load change (v2): ', np.min(v_RLFACTS_AfterLoadChange))
+        print('mean voltage RL after load change (v2): ', np.mean(v_RLFACTS_AfterLoadChange))
+        print('std voltage RL after load change (v2): ', np.std(v_RLFACTS_AfterLoadChange))
 
         # Plot Nose Curve
         fig3 = plt.figure()

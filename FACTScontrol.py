@@ -55,16 +55,9 @@ class ShuntFACTS(ct.basic_controller.Controller):
             self.maxed_counter += 1
 
         # Update for posible next iter of control
-        #print('SHUNT:')
-        #print(self.v_delta_accum)
         self.v_delta_accum += self.v_delta
         self.iter_counter += 1
 
-
-        #print(self.net.shunt.q_mvar[self.shuntIndex])
-        #print(self.meas)
-        #print(self.iter_counter)
-        #print(self.maxed_counter)
 
     # Finalize function MIGHT BE NEEDED IF RESET OF SOME CLASS VARIABLES NEEDED: DEPENDS ON HOW CALLED IN MAIN MODEL
     def finalize_control(self):
@@ -138,20 +131,14 @@ class SeriesFACTS(ct.basic_controller.Controller):
         else:
             # Set output of device if not bypassed
             self.net.impedance.loc[self.serIndex, ['xft_pu', 'xtf_pu']] = op
-            #print(op)
+
 
 
 
         # Update for posible next iter of control
-        #print('SERIES:')
-        #print(self.lp_delta_accum)
         self.lp_delta_accum += self.lp_delta
         self.iter_counter += 1
 
-        #print(op)
-        #print(self.meas)
-        #print(self.iter_counter)
-        #print(self.maxed_counter)
 
     # Finalize function MIGHT BE NEEDED IF RESET OF SOME CLASS VARIABLES NEEDED: DEPENDS ON HOW CALLED IN MAIN MODEL
     def finalize_control(self):
