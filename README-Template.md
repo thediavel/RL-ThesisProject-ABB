@@ -26,8 +26,9 @@ pip install setuptools==41.0.0
 pip install torch===1.4.0 torchvision===0.5.0 -f https://download.pytorch.org/whl/torch_stable.html
 pip install -r requirements.txt
 ```
-## How to use the RL Agent
+
 Once all the dependencies have been installed, we can begin the using different RL agents and see how they perform
+## Initialization
 ```
 from QLearning import qLearning
 from DQN import DQN
@@ -43,9 +44,9 @@ td3Agent=TD3(2, lr=0.001, memorySize=2000, batchSize=64,  decayRate=0.1, numOfEp
 
 We can use the comparePerformance method to analyse how the algorithms perform on a common test set
 ```
-qlres.comparePerformance(steps=600, oper_upd_interval=6, bus_index_shunt=1, bus_index_voltage=1, line_index=1, benchmarkFlag=True)
-dqnres.comparePerformance(steps=600, oper_upd_interval=6, bus_index_shunt=1, bus_index_voltage=1, line_index=1, benchmarkFlag=True)
-td3res.comparePerformance(steps=600, oper_upd_interval=6, bus_index_shunt=1, bus_index_voltage=1, line_index=1, benchmarkFlag=True)
+qlAgent.comparePerformance(steps=600, oper_upd_interval=6, bus_index_shunt=1, bus_index_voltage=1, line_index=1, benchmarkFlag=True)
+dqnAgent.comparePerformance(steps=600, oper_upd_interval=6, bus_index_shunt=1, bus_index_voltage=1, line_index=1, benchmarkFlag=True)
+td3Agent.comparePerformance(steps=600, oper_upd_interval=6, bus_index_shunt=1, bus_index_voltage=1, line_index=1, benchmarkFlag=True)
 ```
 ### Break down into end to end tests
 
