@@ -4,7 +4,7 @@ between production and consumption in the world’s electrical power systems
 (EPS) becomes more and more challenging. Through this project we aim to obtain voltage stability
 in the EPS circuits using Reinforcement Learning. We implement q-learning, DQN and TD3 over a 2 bus system with a varying load profile.
 The project was carried out at ABB by Vishnu Sharma and Joakim Oldeen as a master thesis project. More information
- can be found here : *Link to published report with same name as project*
+ can be found here : *[Reinforcement Learning for Grid Voltage Stability with FACTS](http://uu.diva-portal.org/smash/record.jsf?pid=diva2%3A1447070&dswid=-4746)*
 
 ## Getting Started
 
@@ -105,11 +105,22 @@ There is a load bus in the 2 bus system, where the load keeps on changing. To im
 createLoadProfile()
 ```
 
+### Access Tensorboard
+In order to access tensorboard you can input the following code into your terminal when in your virtual environment:
+
+```
+tensorboard --logdir runs
+```
+
+Then you get the address for tensorboard in the terminal. 
+
+
 ## Built With
 
 * [Pytorch](https://pytorch.org/) - Used to construct and train Neural Networks
 * [Pandapower](https://www.pandapower.org/) - Electrical Power Systems Package
 * [Enlopy](https://enlopy.readthedocs.io/en/latest/) - Used to generate Load Profile
+
 
 
 ## Authors
