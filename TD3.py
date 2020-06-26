@@ -24,46 +24,42 @@ class Actor(nn.Module):
         self.l2 = nn.Linear(256, 256)
         self.l3 = nn.Linear(256, action_dim)
         self.drop_layer = nn.Dropout(p=p)
-        #self.max_action = Variable(torch.FloatTensor(max_action).cuda())
 
     def forward(self, state):
         a = F.relu(self.l1(state))
         a = F.relu(self.l2(a))
         a = self.drop_layer(a);
-        #print(self.max_action)
-        #print(torch.sigmoid(self.l3(a)).flatten())
-        #print(torch.mul(self.max_action,torch.sigmoid(self.l3(a)).flatten()))
         return torch.sigmoid(self.l3(a))
 
 class Critic(nn.Module):
-    # def __init__(self, state_dim, action_dim,p=0.3):
-    #     super(Critic, self).__init__()
-    #
-    #     # Q1 architecture
-    #     self.l1 = nn.Linear(state_dim + action_dim, (state_dim + action_dim)*2)
-    #     self.l2 = nn.Linear((state_dim + action_dim)*2, (state_dim + action_dim)*4)
-    #     self.l3 = nn.Linear((state_dim + action_dim)*4, 1)
-    #     self.drop_layer1 = nn.Dropout(p=p)
-    #     self.drop_layer2 = nn.Dropout(p=p)
-    #     # Q2 architecture
-    #     self.l4 = nn.Linear(state_dim + action_dim, (state_dim + action_dim)*2)
-    #     self.l5 = nn.Linear((state_dim + action_dim)*2,(state_dim + action_dim)*4)
-    #     self.l6 = nn.Linear((state_dim + action_dim)*4, 1)
-    #     self.drop_layer3 = nn.Dropout(p=p)
-    #     self.drop_layer4 = nn.Dropout(p=p)
-
-    def __init__(self, state_dim, action_dim, p=0.3):
+    def __init__(self, state_dim, action_dim,p=0.3):
         super(Critic, self).__init__()
 
         # Q1 architecture
-        self.l1 = nn.Linear(state_dim + action_dim, 256)
-        self.l2 = nn.Linear(256, 256)
-        self.l3 = nn.Linear(256, 1)
-        self.drop_layer = nn.Dropout(p=p)
+        self.l1 = nn.Linear(state_dim + action_dim, (state_dim + action_dim)*2)
+        self.l2 = nn.Linear((state_dim + action_dim)*2, (state_dim + action_dim)*4)
+        self.l3 = nn.Linear((state_dim + action_dim)*4, 1)
+        self.drop_layer1 = nn.Dropout(p=p)
+        self.drop_layer2 = nn.Dropout(p=p)
         # Q2 architecture
-        self.l4 = nn.Linear(state_dim + action_dim, 256)
-        self.l5 = nn.Linear(256, 256)
-        self.l6 = nn.Linear(256, 1)
+        self.l4 = nn.Linear(state_dim + action_dim, (state_dim + action_dim)*2)
+        self.l5 = nn.Linear((state_dim + action_dim)*2,(state_dim + action_dim)*4)
+        self.l6 = nn.Linear((state_dim + action_dim)*4, 1)
+        self.drop_layer3 = nn.Dropout(p=p)
+        self.drop_layer4 = nn.Dropout(p=p)
+
+    # def __init__(self, state_dim, action_dim, p=0.3):
+    #     super(Critic, self).__init__()
+    #
+    #     # Q1 architecture
+    #     self.l1 = nn.Linear(state_dim + action_dim, 256)
+    #     self.l2 = nn.Linear(256, 256)
+    #     self.l3 = nn.Linear(256, 1)
+    #     self.drop_layer = nn.Dropout(p=p)
+    #     # Q2 architecture
+    #     self.l4 = nn.Linear(state_dim + action_dim, 256)
+    #     self.l5 = nn.Linear(256, 256)
+    #     self.l6 = nn.Linear(256, 1)
 
     def forward(self, state, action):
         sa = torch.cat([state, action], 1)
@@ -81,25 +77,25 @@ class Critic(nn.Module):
         q2 = self.l6(q2)
         return q1, q2
 
-    # def Q1(self, state, action):
-    #     sa = torch.cat([state, action], 1)
-    #
-    #     q1 = F.relu(self.l1(sa))
-    #     q1 = self.drop_layer1(q1);
-    #     q1 = F.relu(self.l2(q1))
-    #     q1 = self.drop_layer2(q1);
-    #     q1 = self.l3(q1)
-    #     return q1
-
     def Q1(self, state, action):
         sa = torch.cat([state, action], 1)
 
         q1 = F.relu(self.l1(sa))
-        q1 = self.drop_layer(q1);
+        q1 = self.drop_layer1(q1);
         q1 = F.relu(self.l2(q1))
-        q1 = self.drop_layer(q1);
+        q1 = self.drop_layer2(q1);
         q1 = self.l3(q1)
         return q1
+
+    # def Q1(self, state, action):
+    #     sa = torch.cat([state, action], 1)
+    #
+    #     q1 = F.relu(self.l1(sa))
+    #     q1 = self.drop_layer(q1);
+    #     q1 = F.relu(self.l2(q1))
+    #     q1 = self.drop_layer(q1);
+    #     q1 = self.l3(q1)
+    #     return q1
 
 class TD3:
     def __init__(self, ieeeBusSystem, lr, memorySize, batchSize,  decayRate, numOfEpisodes, stepsPerEpisode,tau,policy_freq,updateAfter):
@@ -119,18 +115,12 @@ class TD3:
         self.learn_step_counter = 0  # for target updating
         self.memory_counter = 0  # for storing memory
         self.memory_capacity = memorySize;
-        # self.memory = np.zeros((memorySize, 3 * 2 + 3))  # initialize memory
         self.memory = BasicBuffer(self.memory_capacity);
         self.learningRate = lr
-        #self.optimizer = torch.optim.Adam(self.eval_net.parameters(), lr=lr)
         self.batch_size = batchSize
         self.numOfEpisodes = numOfEpisodes
-        #self.annealingRate = annealingConstant
         self.numOfSteps = stepsPerEpisode
-        # self.learningRate = learningRate
-        #self.epsilon = epsilon
         self.decayRate = decayRate
-        #self.annealAfter = annealAfter
         self.allRewards = [];
         self.fileName = prefix + '_lr' + str(lr) +  'bs' + str(batchSize) + 'ms' + str(
             memorySize) + 'dr' + str(decayRate) + 'noe' + str(
@@ -146,7 +136,6 @@ class TD3:
             self.critic_target.load_state_dict(checkpoint['criticTarget_state_dict'])
             self.actor_optimizer.load_state_dict(checkpoint['actorOptimizer_state_dict'])
             self.critic_optimizer.load_state_dict(checkpoint['criticOptimizer_state_dict'])
-            #self.epsilon = checkpoint['epsilon']
             self.allRewards = checkpoint['allRewards']
             self.learn_step_counter = checkpoint['learn_step_counter']
             self.memory = checkpoint['memory']
@@ -169,11 +158,8 @@ class TD3:
 
 
 
-        #self.max_action = max_action
-        #self.discount = discount
         self.tau = tau
         self.policy_noise = 0.05
-        #self.noise_clip = noise_clip
         self.policy_freq = policy_freq
         self.total_it = 0
         #self.writer = SummaryWriter(
@@ -191,17 +177,7 @@ class TD3:
         return self.actor(state).cpu().data.numpy().flatten()
 
     def store_transition(self, s, a, r, done,s_):
-        #print((s, a, r, s_, done))
         self.memory.push(s, a, r, s_, done)
-        #transition = np.hstack((s, [a, r, done], s_))
-        # replace the old memory with new memory
-        #index = self.memory_counter % self.memory_capacity
-        #print(len(self.memory))
-        #print(transition)
-        # if self.memory_counter < self.memory_capacity:
-        #     self.memory.append(transition)
-        # else:
-        #self.memory[index]=transition
         self.memory_counter += 1
 
     def train(self):
@@ -230,18 +206,12 @@ class TD3:
             currentState.append(self.env_2bus.getCurrentStateForDQN())
             currentState[3].extend(self.env_2bus.getCurrentStateForDQN())
             currentState = np.array(currentState)
-            # currentState=self.env_2bus.getCurrentStateForDQN();
-            # print(currentState);
             for j in range(0, self.numOfSteps):
                 action=self.select_action(currentState)
                 noise0 = np.random.normal(0, 0.025*self.max_actions[0],1)
                 noise1 = np.random.normal(0, 0.025*self.max_actions[1], 1)
-                #print(s[0])
                 action[0]=max(0,min(self.max_actions[0],action[0]*self.max_actions[0]+noise0[0]))
                 action[1]=max(0,min(self.max_actions[1],action[1]*self.max_actions[1]+noise1[0]))
-                #print(action)
-                #action[0]=action[0]*self.max_actions[0]
-                #action[1]=action[1] * self.max_actions[1]
                 currentMeasurements, reward, done, _ = self.env_2bus.takeAction(action[0], action[1]);
                 oldState = currentState;
                 currentState = np.append(currentState, [currentMeasurements], axis=0)
@@ -274,51 +244,30 @@ class TD3:
     def learn(self):
         self.learn_step_counter += 1
         if self.learn_step_counter%self.UpdateAfter == 1:
-            # Sample replay buffer
             state, action, reward,next_state, done = self.memory.sample(self.batch_size)
             state = Variable(torch.FloatTensor(state).cuda())
             action = Variable(torch.FloatTensor(action).cuda())
             done = Variable(torch.FloatTensor(done).cuda())
             next_state = Variable(torch.FloatTensor(next_state).cuda())
             reward=Variable(torch.FloatTensor(reward).cuda())
-            #print(action.shape)
             with torch.no_grad():
-                # Select action according to policy and add clipped noise
-                #print(torch.randn_like(action))
-                #noise = (
-                #        torch.randn_like(action) * self.policy_noise
-                #).clamp(-self.noise_clip, self.noise_clip)
-
                 n0 = torch.distributions.Normal(torch.tensor([0.0]), torch.tensor([self.policy_noise*self.max_actions[0]]))
                 n1 = torch.distributions.Normal(torch.tensor([0.0]), torch.tensor([self.policy_noise*self.max_actions[1]]))
-
-                #noise0=n0.sample((64,)).clamp(-8, 8).squeeze(1).cuda()
-                #noise1=n1.sample((64,)).clamp(-0.05, 0.05).squeeze(1).cuda()
                 noise0 = n0.sample((self.batch_size,)).clamp(-8, 8).cuda()
                 noise1 = n1.sample((self.batch_size,)).clamp(-0.05, 0.05).cuda()
-
-                #print(noise0)
                 noise=torch.stack([noise0,noise1],dim=1).squeeze(2)
-                #print(noise.shape)
-                #print(noise.shape)
-                #print(self.actor_target(next_state).shape)
-                #print(self.actor_target(next_state))
                 next_action = (
                         self.actor_target(next_state)*torch.tensor(self.max_actions).cuda() + noise
                 )
-                #print(next_action)
                 # Compute the target Q value
                 target_Q1, target_Q2 = self.critic_target(next_state, next_action)
                 target_Q = torch.min(target_Q1, target_Q2)
-                #print((target_Q*done.unsqueeze(1)).shape)
                 target_Q = reward.unsqueeze(1) + self.decayRate * (target_Q * done.unsqueeze(1))
 
             # Get current Q estimates
             current_Q1, current_Q2 = self.critic(state, action)
 
             # Compute critic loss
-            #print(current_Q1.shape)
-            #print(target_Q.shape)
             critic_loss = F.mse_loss(current_Q1, target_Q) + F.mse_loss(current_Q2, target_Q)
 
             # Optimize the critic
@@ -331,7 +280,7 @@ class TD3:
             # Delayed policy updates
             if self.learn_step_counter % (self.policy_freq*self.UpdateAfter) == 1:
 
-                # Compute actor losse
+                # Compute actor loss
                 actor_loss = -self.critic.Q1(state, self.actor(next_state)*torch.tensor(self.max_actions).cuda()).mean()
 
                 # Optimize the actor
@@ -787,7 +736,6 @@ class TD3:
         plt.ylabel('Bus Voltage [pu]', Figure=fig3, fontsize=20)
         plt.xticks(fontsize=16)
         plt.yticks(fontsize=16)
-        # plt.legend(['v no FACTS', 'v FACTS', 'v FACTS no series comp','v RL FACTS', 'v FACTS each ts', 'v RL FACTS benchmark.'], loc=1)
         plt.legend(['RL benchmark', 'no FACTS', 'shunt+series', 'shunt only', 'TD3 $v_1$', 'TD3 $v_2$'], loc=3, fontsize=16)
         plt.grid()
         plt.show()

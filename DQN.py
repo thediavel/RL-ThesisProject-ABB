@@ -33,8 +33,7 @@ class DQN:
         USE_CUDA = torch.cuda.is_available();
         self.learn_step_counter = 0  # for target updating
         self.memory_counter = 0  # for storing memory
-        self.memory_capacity=memorySize;
-        #self.memory = np.zeros((memorySize, 3 * 2 + 3))  # initialize memory
+        self.memory_capacity=memorySize;  # initialize memory
         self.memory=BasicBuffer(self.memory_capacity);
         self.learningRate=lr
         self.optimizer = torch.optim.Adam(self.eval_net.parameters(), lr=lr)
@@ -74,30 +73,17 @@ class DQN:
                 for k, v in state.items():
                     if isinstance(v, torch.Tensor):
                         state[k] = v.cuda()
-            #if next(self.eval_net.parameters()).is_cuda:
-            #    print('done')
 
-        self.writer = SummaryWriter(
-            'runs/' + self.fileName);
-        dummystate, dummyaction, _, _, _ = self.memory.sample(1);
-        # self.writer.add_graph(self.actor,torch.FloatTensor(dummystate).cuda())
-        print(dummystate)
-        self.writer.add_graph(self.eval_net,
-                              torch.FloatTensor(dummystate).cuda())
-        self.writer.close()
+
+        # self.writer = SummaryWriter(
+        #     'runs/' + self.fileName);
+        # dummystate, dummyaction, _, _, _ = self.memory.sample(1);
+        # self.writer.add_graph(self.eval_net,
+        #                       torch.FloatTensor(dummystate).cuda())
+        # self.writer.close()
 
     def store_transition(self, s, a, r, done,s_):
-        #print((s, a, r, s_, done))
         self.memory.push(s, a, r, s_, done)
-        #transition = np.hstack((s, [a, r, done], s_))
-        # replace the old memory with new memory
-        #index = self.memory_counter % self.memory_capacity
-        #print(len(self.memory))
-        #print(transition)
-        # if self.memory_counter < self.memory_capacity:
-        #     self.memory.append(transition)
-        # else:
-        #self.memory[index]=transition
         self.memory_counter += 1
 
     def getActionFromIndex(self, ind):
@@ -113,29 +99,16 @@ class DQN:
             self.target_net.load_state_dict(self.eval_net.state_dict())
         self.learn_step_counter += 1
         # sample batch transitions
-        #sample_index = np.random.choice(self.memory_capacity, self.batch_size)
         b_s,b_a,b_r,b_s_,dones = self.memory.sample(self.batch_size)
-        #print(b_a)
-        #b_s.astype(float)
         b_s=Variable(torch.FloatTensor(b_s).cuda())
         b_a = Variable(torch.LongTensor(b_a).cuda())
-        #b_r = b_memory[2]
         b_s_ = Variable(torch.FloatTensor(b_s_).cuda())
-        #dones = b_memory[4]
-
-        # b_s = Variable(torch.FloatTensor(b_memory[:, :3]).cuda())
-        # b_a = Variable(torch.LongTensor(b_memory[:, 3:3 + 1].astype(int)).cuda())
-        # b_r = b_memory[:, 3 + 1:3 + 2]
-        # dones=Variable(torch.FloatTensor(b_memory[:, 3 + 2:3 + 3]).cuda())
-        # b_s_ = Variable(torch.FloatTensor(b_memory[:, -3:]).cuda())
-        #print(b_a.shape)
         q_eval = self.eval_net(b_s.unsqueeze(1)).gather(1, b_a.unsqueeze(1))  # shape (batch, 1)
         if self.ddqnMode:
             q_next_eval = self.eval_net(b_s_.unsqueeze(1)).detach()
             q_next_target = self.target_net(b_s_.unsqueeze(1)).detach()
         else:
             q_next = self.target_net(b_s_.unsqueeze(1)).detach()  # detach from graph, don't backpropagate
-           # q_target = b_r + self.decayRate * (q_next.max(1)[0].unsqueeze(1))  # shape (batch, 1)
 
         target = [];
         for i in range(0, self.batch_size):
@@ -145,27 +118,17 @@ class DQN:
             else:
                 if self.ddqnMode:
                     values, action = q_next_eval[i].max(0)
-                    #action = np.argmax(q_next_eval[i].)
                     target.append(self.decayRate*q_next_target[i][action].item())
                 else:
-                    #print(q_next[i])
-                    #print(q_next[i].max(0)[0].item())
                     target.append(self.decayRate*q_next[i].max(0)[0].item())
         q_target = np.add(b_r , target)
-        #q_target = np.array(q_target)
         q_target = Variable(torch.FloatTensor(q_target).cuda())
-        #print(q_target.shape)
-        #print(q_target.shape)
-        #print(q_eval)
-        #print(q_target)
         loss = self.loss_func(q_eval, q_target.unsqueeze(1))
         self.optimizer.zero_grad()
         loss.backward()
         self.optimizer.step()
-        #print(loss.item())
         self.runningLoss+=loss.item()
         self.runningRewards+=sum(b_r)/self.batch_size
-        #print(self.learn_step_counter)
         if self.learn_step_counter % 200 == 0:  # every 200 mini-batches...
 
             # ...log the running loss
@@ -177,13 +140,6 @@ class DQN:
                                    self.runningRewards/200,
                                    self.learn_step_counter)
             self.runningRewards = 0;
-
-
-            # ...log a Matplotlib Figure showing the model's predictions on a
-            # random mini-batch
-            #self.writer.add_figure('predictions vs. actuals',
-            #                  plot_classes_preds(net, inputs, labels),
-            #                  global_step=epoch * len(trainloader) + i)
             self.runningLoss = 0.0
 
     def train(self):
@@ -211,33 +167,20 @@ class DQN:
             currentState.append(self.env_2bus.getCurrentStateForDQN())
             currentState[3].extend(self.env_2bus.getCurrentStateForDQN())
             currentState=np.array(currentState)
-            #currentState=self.env_2bus.getCurrentStateForDQN();
-            #print(currentState);
             for j in range(0, self.numOfSteps):
-                #print(j)
                 epsComp = np.random.random();
-                #currentState = self.getStateFromMeasurements_2([oldMeasurements, currentMeasurements]);
                 if epsComp <= self.epsilon:
                     # Exploration Part
                     actionIndex = np.random.choice(len(self.actions), 1)[0]
                 else:
                     # Greedy Approach
                     q_value = self.eval_net.forward(Variable(torch.unsqueeze(torch.unsqueeze(torch.FloatTensor(currentState),0),0)).cuda());
-                    #print(torch.max(q_value, 1)[1].shape)
                     actionIndex = torch.max(q_value, 1)[1].data.cpu().numpy()[0]  # return the argmax
-                    #actionIndex = self.q_table[currentState].idxmax();
                 action = self.getActionFromIndex(actionIndex);
-                #oldMeasurements = currentMeasurements;
                 currentMeasurements, reward, done, _ = self.env_2bus.takeAction(action[0], action[1]);
                 oldState=currentState;
-                #currentMeasurements=np.array(currentMeasurements);
-                #print(currentMeasurements)
-                #np.append(currentState,currentMeasurements,0)
                 currentState=np.append(currentState, [currentMeasurements],axis=0)
-                #currentState.append(currentMeasurements);
                 currentState=np.delete(currentState,0,axis=0);
-                #currentState=currentMeasurements;
-                #print(currentState)
                 self.store_transition(oldState, actionIndex, reward, done ,currentState)
                 accumulatedReward += reward;
                 if self.memory_counter > self.memory_capacity:
@@ -249,7 +192,6 @@ class DQN:
             if (i + 1) % self.annealAfter == 0:
                 print('Episode: ' + str(len(self.allRewards)) + '; reward:' + str(accumulatedReward))
                 self.epsilon = self.annealingRate * self.epsilon;
-                # if self.learn_step_counter % 200 == 0:
                 print('saving checkpoint data')
                 torch.save({
                     'epsilon': self.epsilon,
@@ -777,7 +719,6 @@ class DQN:
         plt.legend(['RL benchmark','no FACTS', 'shunt+series', 'shunt only', 'DQN $v_1$', 'DQN $v_2$'], loc=3, fontsize=16)
         plt.grid()
         plt.show()
-
 
 
     # This method replaces runFACTSallActionsRL as this saves result into picke file to be used after it has been run once.
